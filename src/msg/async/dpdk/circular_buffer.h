@@ -45,7 +45,15 @@ class circular_buffer {
     // begin, end interpreted (mod capacity)
     size_t begin = 0;
     size_t end = 0;
-    size_t capacity = 0;
+    size_t capacity = 0; 
+  template<typename _Up, typename... _Args>
+	void construct(_Up* __p, _Args&&... __args)
+	noexcept(std::is_nothrow_constructible<_Up, _Args...>::value)
+	{ ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+  template<typename _Up>
+	void destroy(_Up* __p) 
+	noexcept(std::is_nothrow_destructible<_Up>::value)
+	{ __p->~_Up(); }
   };
   impl _impl;
  public:
@@ -154,7 +162,7 @@ class circular_buffer {
    private:
     CB* cb;
     size_t idx;
-    cbiterator<CB, ValueType>(CB* b, size_t i) : cb(b), idx(i) {}
+    cbiterator(CB* b, size_t i) : cb(b), idx(i) {}
     friend class circular_buffer;
   };
   friend class iterator;

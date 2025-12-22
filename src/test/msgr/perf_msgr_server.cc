@@ -53,7 +53,7 @@ class ServerDispatcher : public Dispatcher {
     }
     Message *_dequeue() override {
       if (messages.empty())
-	return NULL;
+	  return NULL;
       Message *m = messages.front();
       messages.pop_front();
       return m;
@@ -114,12 +114,12 @@ class MessengerServer {
 
  public:
   MessengerServer(const string &t, const string &addr, int threads, int delay):
-      msgr(NULL), type(t), bindaddr(addr), dispatcher(threads, delay),
-      dummy_auth(g_ceph_context) {
+    msgr(NULL), type(t), bindaddr(addr), dispatcher(threads, delay),
+    dummy_auth(g_ceph_context) {
     msgr = Messenger::create(g_ceph_context, type, entity_name_t::OSD(0), "server", 0);
     msgr->set_default_policy(Messenger::Policy::stateless_server(0));
     dummy_auth.auth_registry.refresh_config();
-      msgr->set_auth_server(&dummy_auth);
+    msgr->set_auth_server(&dummy_auth);
   }
   ~MessengerServer() {
     msgr->shutdown();
@@ -149,6 +149,25 @@ int main(int argc, char **argv)
   auto cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
 			 CODE_ENVIRONMENT_UTILITY,
 			 CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
+  if(args.size()>3&&(args[3][0] == 'r' || args[3][0] == 'R')){
+    std::stringstream cout_ss; // 创建一个stringstream对象
+    g_ceph_context->_conf.set_val("ms_type", "async+rdma",&cout_ss);
+    cout<<cout_ss.str()<<std::endl;
+  }
+  if(args.size()>3&&(args[3][0] == 'd' || args[3][0] == 'D')){
+    std::stringstream cout_ss; // 创建一个stringstream对象
+    
+    g_ceph_context->_conf.set_val("ms_type", "async+dpdk",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_dpdk_memory_channel", "2",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_dpdk_hw_queue_weight", "1",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_dpdk_coremask", "0xf0",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_dpdk_hw_queue_weight", "1",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_async_op_threads", "1",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_dpdk_gateway_ipv4_addr", "10.180.207.254",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_dpdk_netmask_ipv4_addr", "255.255.252.0",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_dpdk_host_ipv4_addr", "10.180.207.201",&cout_ss);
+    cout<<cout_ss.str()<<std::endl;
+  }
   common_init_finish(g_ceph_context);
   g_ceph_context->_conf.apply_changes(nullptr);
 

@@ -47,7 +47,7 @@ class DPDKServerSocketImpl : public ServerSocketImpl {
   virtual int fd() const override {
     return _listener.fd();
   }
-  virtual void set_priority(int sd, int prio, int domain) override {}
+  virtual void set_priority(int sd, int prio, int domain) {}//该函数在ServerSocketImpl中已经删去
 };
 
 // NativeConnectedSocketImpl
@@ -67,7 +67,7 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
   virtual int is_connected() override {
     return _conn.is_connected();
   }
-
+  virtual void set_priority(int sd, int prio, int domain) {} //ConnectedSocketImpl新增了一个这个接口
   virtual ssize_t read(char *buf, size_t len) override {
     size_t left = len;
     ssize_t r = 0;

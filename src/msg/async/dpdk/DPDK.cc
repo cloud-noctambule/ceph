@@ -399,13 +399,15 @@ class XstatSocketHook : public AdminSocketHook {
   DPDKDevice *dev;
  public:
   explicit XstatSocketHook(DPDKDevice *dev) : dev(dev) {}
-  int call(std::string_view prefix, const cmdmap_t& cmdmap,
-           Formatter *f,
-           std::ostream& ss,
-           bufferlist& out) override {
-    if (prefix == "show_pmd_stats") {
+  int call(std::string_view command, // 确保参数名称与基类中的一致
+           const cmdmap_t& cmdmap,
+           const ceph::buffer::list& inbl,
+           ceph::Formatter *f, // 确保参数类型与基类中的一致
+           std::ostream& errss, // 确保参数名称与基类中的一致
+           ceph::buffer::list& out) override { // 确保参数类型与基类中的一致
+    if (command == "show_pmd_stats") {
       dev->nic_stats_dump(f);
-    } else if (prefix == "show_pmd_xstats") {
+    } else if (command == "show_pmd_xstats") {
       dev->nic_xstats_dump(f);
     }
     return 0;
