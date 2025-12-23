@@ -202,7 +202,14 @@ class MessengerClient {
     if(mode == ClientThreadModel::MULTI_THREAD_SHARE_SERVER){
       delete MessengerClient::ClientThread::client_completion;
     }
-    for (uint64_t i = 0; i < clients.size(); ++i){
+    // 先 join 所有 ClientThread，确保线程安全退出
+    for (uint64_t i = 0; i < clients.size(); ++i) {
+      if (clients[i]->is_started()) {
+        clients[i]->join(nullptr);
+      }
+    }
+    // 再 delete
+    for (uint64_t i = 0; i < clients.size(); ++i) {
       clients[i]->delete_vec();
       delete clients[i];
     }
