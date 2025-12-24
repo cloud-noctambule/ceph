@@ -1,3 +1,4 @@
+
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 /*
  * Ceph - scalable distributed file system
@@ -99,7 +100,38 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
     return len - left ? len - left : -EAGAIN;
   }
 
+  // 新增 zero-copy read 接口，read packet
+  ssize_t read(std::optional<Packet>& ret, size_t len) {
+    auto err = _conn.get_errno();
+    if (err <= 0)
+      return err;
+
+    if (!_buf) {
+      _buf = std::move(_conn.read());
+      //make sure internal data only
+      ceph_assert(_buf->use_internal_data() == true); 
+      if (!_buf)
+        return -EAGAIN;
+      _cur_off = 0;
+    }
+    uint32_t read_len = _buf->len()-_cur_off;
+    if( read_len == 0 ) return -EAGAIN;
+    //share函数会自动的share里面的delter
+    //deleter本身自带了引用计数
+    ret = _buf->share(_cur_off, std::min(len, (size_t)read_len));
+    _cur_off += ret->len();
+    if (_cur_off >= _buf->len()) {
+      _buf.reset();
+      _cur_off = 0;
+    }
+    return read_len;
+  }
 private:
+/*
+这个函数应该调用的是这个接口
+std::optional<Packet> tcp<InetTraits>::tcb::read()
+在这里面会将前面的一些Packet进行合并，只返回一个Packet
+*/
   ssize_t zero_copy_read(bufferptr &data) {
     auto err = _conn.get_errno();
     if (err <= 0)
@@ -126,6 +158,23 @@ private:
     }
     ceph_assert(data.length());
     return data.length();
+  }
+  // zero-copy send 接口
+  // send的拷贝不发生在这附近，而是在最后的from_packet_zc函数中
+  ssize_t send(const Packet& p, bool more) {
+    auto err = _conn.get_errno();
+    if (err < 0)
+      return (ssize_t)err;
+
+    size_t available = _conn.peek_sent_available();
+    if (available == 0) {
+      return 0;
+    }
+    if( avialable < p.len() ) {
+      return -EAGAIN;
+    }
+    _conn.send(p);
+    return p.len();
   }
   virtual ssize_t send(bufferlist &bl, bool more) override {
     auto err = _conn.get_errno();

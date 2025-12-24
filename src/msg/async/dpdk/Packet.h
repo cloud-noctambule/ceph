@@ -36,6 +36,7 @@
 struct fragment {
     char* base;
     size_t size;
+    void* mbuf_ptr = nullptr; // for zero-copy, point to rte_mbuf*
 };
 
 struct offload_info {
@@ -225,6 +226,11 @@ public:
   unsigned len() const { return _impl->_len; }
   unsigned memory() const { return len() +  sizeof(Packet::impl); }
 
+  bool get_del_ref_count() const{
+    if(impl) {
+      return _impl->_deleter.get_ref_count();
+    }
+  }
   fragment frag(unsigned idx) const { return _impl->frags[idx]; }
   fragment& frag(unsigned idx) { return _impl->frags[idx]; }
 

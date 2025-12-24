@@ -22,7 +22,7 @@
 
 #ifndef CEPH_DPDK_DEV_H
 #define CEPH_DPDK_DEV_H
-
+#include <boost/lockfree/queue.hpp>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -94,6 +94,7 @@ typedef void    *MARKER[0];   /**< generic marker for a point in a structure */
 class DPDKQueuePair {
   using packet_provider_type = std::function<std::optional<Packet> ()>;
  public:
+  bool is_force_zero_copy_enabled;
   void configure_proxies(const std::map<unsigned, float>& cpu_weights);
   // build REdirection TAble for cpu_weights map: target cpu -> weight
   void build_sw_reta(const std::map<unsigned, float>& cpu_weights);
@@ -359,6 +360,12 @@ class DPDKQueuePair {
 
     rte_mbuf* rte_mbuf_p() { return &_mbuf; }
 
+    bool check_del_ref() {
+      if (_p) {
+        return _p->get_del_ref_count();
+      }
+      return 0;
+    }
     void set_zc_info(void* va, phys_addr_t pa, size_t len) {
       // mbuf_put()
       _mbuf.data_len           = len;
@@ -453,23 +460,34 @@ class DPDKQueuePair {
      * @return a free tx_buf object
      */
     tx_buf* get() {
-      // Take completed from the HW first
-      tx_buf *pkt = get_one_completed();
-      if (pkt) {
-        pkt->reset_zc();
-        return pkt;
+      tx_buf *pkt;
+      if( is_force_zero_copy_enabled ) {
+        if (_ring.empty()) {
+          gc();
+          return nullptr;
+        }
+        pkt = _ring.back();
+        _ring.pop_back();
+      }
+      else{
+        // Take completed from the HW first
+        pkt = get_one_completed();
+        if (pkt) {
+          pkt->reset_zc();
+          return pkt;
+        }
+        //
+        // If there are no completed at the moment - take from the
+        // factory's cache.
+        //
+        if (_ring.empty()) {
+          return nullptr;
+        }
+
+        pkt = _ring.back();
+        _ring.pop_back();
       }
 
-      //
-      // If there are no completed at the moment - take from the
-      // factory's cache.
-      //
-      if (_ring.empty()) {
-        return nullptr;
-      }
-
-      pkt = _ring.back();
-      _ring.pop_back();
 
       return pkt;
     }
@@ -483,14 +501,35 @@ class DPDKQueuePair {
       return _ring.size();
     }
 
+    //在零拷贝的情况下，有一个问题需要注意：
+    //TCP/IP可能会重传数据包，如果数据包还在网络设备的发送队列中，那么
+    //如果这里提前清空回收，重传的数据就是错误的。
+    //所以在零拷贝的情况下，不能过早的回收数据包
     bool gc() {
-      for (int cnt = 0; cnt < gc_count; ++cnt) {
+      int cnt = 0;
+      if( is_force_zero_copy_enabled ){
+        for (auto it = _later_to_free.begin(); it != _later_to_free.end(); ) {
+            auto next_it = ++it; // 先获取下一个迭代器（it 会先递增）
+            --it; // 回到当前迭代器
+            if ( (*it)->check_del_ref() <= 1) {
+              _later_to_free.erase(it); // 删除当前节点
+              put(*it);
+              ++cnt;
+            }
+            it = next_it; // 用提前记录的下一个迭代器更新
+        }
+      }
+      for (; cnt < gc_count; ++cnt) {
         auto tx_buf_p = get_one_completed();
         if (!tx_buf_p) {
           return false;
         }
-
-        put(tx_buf_p);
+        if (is_force_zero_copy_enabled && tx_buf_p->check_del_ref() <= 1) {
+          put(tx_buf_p);
+        }
+        else{
+          _later_to_free.push_back(tx_buf_p);
+        }
       }
 
       return true;
@@ -526,7 +565,9 @@ class DPDKQueuePair {
 
    private:
     CephContext *cct;
+    bool is_force_zero_copy_enabled;
     std::vector<tx_buf*> _ring;
+    std::list<tx_buf*> _later_to_free;
     rte_mempool* _pool = nullptr;
   };
 
@@ -680,6 +721,7 @@ class DPDKQueuePair {
   rte_mempool *_pktmbuf_pool_rx;
   std::vector<rte_mbuf*> _rx_free_pkts;
   std::vector<rte_mbuf*> _rx_free_bufs;
+  boost::lockfree::queue<rte_mbuf*> _lock_free_rx_pkts;
   std::vector<fragment> _frags;
   std::vector<char*> _bufs;
   size_t _num_rx_free_segs = 0;

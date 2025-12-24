@@ -84,6 +84,15 @@ class deleter final {
   /// Appends another deleter to this deleter.  When this deleter is
   /// destroyed, both encapsulated actions will be carried out.
   void append(deleter d);
+  int get_ref_count() const {
+    if (!_impl) {
+      return 0;
+    }
+    if (is_raw_object()) {
+      return 1;
+    }
+    return _impl->refs.load();
+  }
  private:
   static bool is_raw_object(impl* i) {
     auto x = reinterpret_cast<uintptr_t>(i);
