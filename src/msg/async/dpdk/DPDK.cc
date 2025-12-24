@@ -633,6 +633,10 @@ DPDKQueuePair::DPDKQueuePair(CephContext *c, EventCenter *cen, DPDKDevice* dev, 
     _tx_poller(this), _rx_gc_poller(this), _tx_buf_factory(c, dev, qid),
     _tx_gc_poller(this),_lock_free_rx_pkts(mbufs_per_queue_rx)
 {
+  is_force_zero_copy_enabled = cct->_conf.get_val<bool>("ms_dpdk_force_zero_copy");
+  if(is_force_zero_copy_enabled){
+    ldout(cct, 0) << __func__ << " force zero copy is enabled" << dendl;
+  }
   if (!init_rx_mbuf_pool()) {
     lderr(cct) << __func__ << " cannot initialize mbuf pools" << dendl;
     ceph_abort();
@@ -1062,6 +1066,7 @@ bool DPDKQueuePair::poll_rx_once()
 DPDKQueuePair::tx_buf_factory::tx_buf_factory(CephContext *c,
         DPDKDevice *dev, uint8_t qid): cct(c)
 {
+  is_force_zero_copy_enabled = cct->_conf.get_val<bool>("ms_dpdk_force_zero_copy");
   std::string name = std::string(pktmbuf_pool_name) + std::to_string(qid) + "_tx";
 
   _pool = rte_mempool_lookup(name.c_str());

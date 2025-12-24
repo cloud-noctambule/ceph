@@ -353,7 +353,7 @@ class MessengerClient {
 vector<bool>* MessengerClient::ClientThread::client_completion = nullptr;
 ceph::mutex MessengerClient::ClientThread::client_completion_lock = ceph::make_mutex("MessengerClient::client_completion_lock");
 void MessengerClient::ClientDispatcher::ms_fast_dispatch(Message *m) {
-  usleep(think_time);
+  // usleep(think_time);
   m->put();
   uint64_t recv_time = Cycles::rdtsc();
   std::lock_guard l{thread->lock};
@@ -399,6 +399,7 @@ int main(int argc, char **argv)
     g_ceph_context->_conf.set_val("ms_dpdk_gateway_ipv4_addr", "192.168.0.53",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_netmask_ipv4_addr", "255.255.255.0",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_host_ipv4_addr", "192.168.0.94",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);
