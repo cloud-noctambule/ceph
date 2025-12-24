@@ -360,11 +360,11 @@ class DPDKQueuePair {
 
     rte_mbuf* rte_mbuf_p() { return &_mbuf; }
 
-    bool check_del_ref() {
+    bool check_del_ref_count() {
       if (_p) {
-        return _p->get_del_ref_count();
+        return _p->get_del_ref_count()<=1;
       }
-      return 0;
+      return true;
     }
     void set_zc_info(void* va, phys_addr_t pa, size_t len) {
       // mbuf_put()
@@ -511,7 +511,7 @@ class DPDKQueuePair {
         for (auto it = _later_to_free.begin(); it != _later_to_free.end(); ) {
             auto next_it = ++it; // 先获取下一个迭代器（it 会先递增）
             --it; // 回到当前迭代器
-            if ( (*it)->check_del_ref() <= 1) {
+            if ( (*it)->check_del_ref_count()) {
               _later_to_free.erase(it); // 删除当前节点
               put(*it);
               ++cnt;
@@ -524,7 +524,7 @@ class DPDKQueuePair {
         if (!tx_buf_p) {
           return false;
         }
-        if (is_force_zero_copy_enabled && tx_buf_p->check_del_ref() <= 1) {
+        if (is_force_zero_copy_enabled && tx_buf_p->check_del_ref_count()) {
           put(tx_buf_p);
         }
         else{

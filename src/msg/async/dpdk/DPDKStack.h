@@ -109,7 +109,7 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
     if (!_buf) {
       _buf = std::move(_conn.read());
       //make sure internal data only
-      ceph_assert(_buf->use_internal_data() == true); 
+      ceph_assert(_buf->using_internal_data() == true); 
       if (!_buf)
         return -EAGAIN;
       _cur_off = 0;
@@ -170,7 +170,7 @@ std::optional<Packet> tcp<InetTraits>::tcb::read()
     if (available == 0) {
       return 0;
     }
-    if( avialable < p.len() ) {
+    if( available < p.len() ) {
       return -EAGAIN;
     }
     _conn.send(p);

@@ -225,9 +225,11 @@ public:
 
   unsigned len() const { return _impl->_len; }
   unsigned memory() const { return len() +  sizeof(Packet::impl); }
-
+  bool using_internal_data() const {
+    return _impl->using_internal_data();
+  }
   bool get_del_ref_count() const{
-    if(impl) {
+    if(_impl) {
       return _impl->_deleter.get_ref_count();
     }
   }

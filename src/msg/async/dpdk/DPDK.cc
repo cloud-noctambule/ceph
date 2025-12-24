@@ -631,7 +631,7 @@ class C_handle_dev_stats : public EventCallback {
 DPDKQueuePair::DPDKQueuePair(CephContext *c, EventCenter *cen, DPDKDevice* dev, uint8_t qid)
   : cct(c), _dev(dev), _dev_port_idx(dev->port_idx()), center(cen), _qid(qid),
     _tx_poller(this), _rx_gc_poller(this), _tx_buf_factory(c, dev, qid),
-    _tx_gc_poller(this)
+    _tx_gc_poller(this),_lock_free_rx_pkts(mbufs_per_queue_rx)
 {
   if (!init_rx_mbuf_pool()) {
     lderr(cct) << __func__ << " cannot initialize mbuf pools" << dendl;
@@ -868,6 +868,7 @@ inline std::optional<Packet> DPDKQueuePair::from_mbuf(rte_mbuf* m)
                     make_deleter([this, m] { 
                       bool ret = _lock_free_rx_pkts.push(m);
                       //to_do: make sure push success
+                      ceph_assert(ret);
                     }));
     }
     char* data = rte_pktmbuf_mtod(m, char*);

@@ -189,6 +189,7 @@ void Processor::accept()
 	w = msgr->get_stack()->get_worker();
       else
 	++w->references;
+      ldout(msgr->cct, 0) << __func__ << " accepting on worker " << w->id << dendl;
       int r = listen_socket.accept(&cli_socket, opts, &addr, w);
       if (r == 0) {
 	ldout(msgr->cct, 10) << __func__ << " accepted incoming on sd "

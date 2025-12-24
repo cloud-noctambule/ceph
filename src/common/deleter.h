@@ -73,6 +73,7 @@ class deleter final {
   ///
   /// \return a deleter with the same encapsulated action as this one.
   deleter share();
+  int get_ref_count() const;
   /// Checks whether the deleter has an associated action.
   explicit operator bool() const { return bool(_impl); }
   /// \cond internal
@@ -84,15 +85,7 @@ class deleter final {
   /// Appends another deleter to this deleter.  When this deleter is
   /// destroyed, both encapsulated actions will be carried out.
   void append(deleter d);
-  int get_ref_count() const {
-    if (!_impl) {
-      return 0;
-    }
-    if (is_raw_object()) {
-      return 1;
-    }
-    return _impl->refs.load();
-  }
+  
  private:
   static bool is_raw_object(impl* i) {
     auto x = reinterpret_cast<uintptr_t>(i);
@@ -204,7 +197,15 @@ inline deleter deleter::share() {
   ++_impl->refs;
   return deleter(_impl);
 }
-
+  inline int deleter::get_ref_count() const {
+    if (!_impl) {
+      return 0;
+    }
+    if (is_raw_object()) {
+      return 1;
+    }
+    return _impl->refs.load();
+  }
 // Appends 'd' to the chain of deleters. Avoids allocation if possible. For
 // performance reasons the current chain should be shorter and 'd' should be
 // longer.
