@@ -399,7 +399,7 @@ int main(int argc, char **argv)
     g_ceph_context->_conf.set_val("ms_dpdk_gateway_ipv4_addr", "192.168.0.53",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_netmask_ipv4_addr", "255.255.255.0",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_host_ipv4_addr", "192.168.0.94",&cout_ss);
-    g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "true",&cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);
