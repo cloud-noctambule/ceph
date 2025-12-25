@@ -1,7 +1,9 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <asm-generic/errno-base.h>
 #include <type_traits>
+#include <unistd.h>
 
 #include "ProtocolV2.h"
 #include "AsyncMessenger.h"
@@ -12,6 +14,10 @@
 #include "include/random.h"
 #include "auth/AuthClient.h"
 #include "auth/AuthServer.h"
+#include "msg/DPDKMessage.h"
+#include "msg/async/Protocol.h"
+#include "msg/async/dpdk/Packet.h"
+#include "msg/async/frames_v2.h"
 
 #define dout_subsys ceph_subsys_ms
 #undef dout_prefix
@@ -101,6 +107,8 @@ ProtocolV2::ProtocolV2(AsyncConnection *connection)
       rx_frame_asm(&session_stream_handlers, false, cct->_conf->ms_crc_data,
                    &session_compression_handlers),
       next_tag(static_cast<Tag>(0)),
+      //TO_DO: need a parameter to initialize the queue
+      dpdk_out_queue(4096),
       keepalive(false) {
 }
 
@@ -424,7 +432,46 @@ void ProtocolV2::prepare_send_message(uint64_t features,
   // encode and copy out of *m
   m->encode(features, 0);
 }
+void ProtocolV2::prepare_send_dpdk_message(uint64_t features,
+					   DPDKMessage *dpdk_msg) {
+  ldout(cct, 20) << __func__ << " dpdk_msg=" << *dpdk_msg << dendl;
 
+  // encode and copy out of *dpdk_msg
+  dpdk_msg->encode(features, 0);
+}
+int ProtocolV2::send_dpdk_message(DPDKMessage *dpdk_msg) {
+  uint64_t f = connection->get_features_fast();
+  // const bool can_fast_prepare = messenger->ms_can_fast_dispatch(dpdk_msg);
+  bool can_fast_prepare = true;
+  if (can_fast_prepare) {
+    prepare_send_dpdk_message(f, dpdk_msg);
+  }
+  // DPDK 模式下, 我们不使用事件传递去唤醒 worker
+  // 因为 worker本身就是在不断的轮询，这个地方直接放到Worker直接能够获取的地方。
+  bool is_prepared = can_fast_prepare;
+  // "features" changes will change the payload encoding
+  if (can_fast_prepare && (!can_write || connection->get_features_fast() != f)) {
+    //现在的测试代码应该不会改变
+    ldout(cct, -1) << __func__ << " clear encoded buffer previous " << f
+                   << " != " << connection->get_features_fast() << dendl;
+  }
+  if (state == CLOSED) {
+    ldout(cct, 10) << __func__ << " connection closed."
+                   << " Drop message " << dpdk_msg << dendl;
+    dpdk_msg->put();
+  } else {
+    ldout(cct, 5) << __func__ << " enqueueing message dpdk_msg=" << dpdk_msg
+                  << " type=" << dpdk_msg->get_type() << " " << *dpdk_msg << dendl;
+    dpdk_msg->queue_start = ceph::mono_clock::now();
+    dpdk_msg->trace.event("async enqueueing message");
+    bool ret = dpdk_out_queue.push(dpdk_msg);
+    if (!ret) {
+      ldout(cct, 10) << __func__ << " dpdk_out_queue is full, drop dpdk_msg=" << dpdk_msg << dendl;
+    }
+    return ret?0:-1;
+  }
+  return 0;
+}
 void ProtocolV2::send_message(Message *m) {
   uint64_t f = connection->get_features();
 
@@ -460,6 +507,7 @@ void ProtocolV2::send_message(Message *m) {
                    << dendl;
     if (((!replacing && can_write) || state == STANDBY) && !write_in_progress) {
       write_in_progress = true;
+      //这里是唤醒Worker去执行ProtocolV2的write_event
       connection->center->dispatch_event_external(connection->write_handler);
     }
   }
@@ -516,7 +564,86 @@ ProtocolV2::out_queue_entry_t ProtocolV2::_get_next_outgoing() {
   }
   return out_entry;
 }
+ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
+  if(connection->outgoing_bl.length() > 0){
+    ssize_t ret = connection->_try_send(false);
+    if(ret < 0){
+      return ret;
+    }
+    if(ret > 0 ){
+      // 确保整个DPDK的零拷贝数据在发送前，其他的数据都发送完成了。
+      ldout(cct, 0)<< __func__ <<" bl not send complete, \
+                      write_dpdk_message fail: ret = "<<ret<<dendl;
+      return -EIO;
+    }
+  }
+  dpdk_msg->set_seq(++out_seq);
+  //暂时不需要上锁
+  uint64_t ack_seq = in_seq;
+  ack_left = 0;
+  ceph_msg_header &header = dpdk_msg->get_header();
+  ceph_msg_footer &footer = dpdk_msg->get_footer();
+  //only use _crc_rev0                         
+  ssize_t preabmble_epilogue_header_size = sizeof(ceph_msg_header2) + sizeof(preamble_block_t) + sizeof(epilogue_crc_rev0_block_t);
+  if(!dpdk_share_protocol_header){
+    //在这种情况下，我们直接获取一个rte_mbuf来装填Message的头
+    fragment frag;
+    int frag_size = get_a_frag(frag)//TO_DO
+    if(frag_size < preabmble_epilogue_header_size){
+      ldout(cct, 0) << __func__ << " error frag_size < preabmble_epilogue_header_size" << dendl;
+      ceph_abort();
+      return -EINVAL;
+    }
+    if(!mbuf){
+      ldout(cct, 1) << __func__ << " error alloc mbuf" << dendl;
+      return -ENOMEM;
+    }
+    preamble_block_t *preamble = reinterpret_cast<preamble_block_t*>(frag.base);
+    // 填充preamble
+    preamble->tag = static_cast<__u8>(Tag::DPDK_MESSAGE);
+    preamble->num_segments = 4;
+    preamble->segments[0] = sizeof(ceph_msg_header2);
+    preamble->segments[1] = dpdk_msg->get_payload().len();
+    preamble->segments[2] = dpdk_msg->get_middle().len();
+    preamble->segments[3] = dpdk_msg->get_data().len();
+    preamble->flags = 0;
+    preamble-> crc = ceph_crc32c(
+      0, reinterpret_cast<const unsigned char*>(preamble),
+      sizeof(preamble_block_t) - sizeof(preamble->crc));
 
+    epilogue_crc_rev0_block_t *epilogue = reinterpret_cast<epilogue_crc_rev0_block_t*>(frag.base + sizeof(preamble_block_t));
+    
+    ceph_msg_header2 *header2 = reinterpret_cast<ceph_msg_header2*>((void*)epilogue + sizeof(epilogue_crc_rev0_block_t));
+    header2->seq = header.seq;
+    header2->tid = header.tid;
+    header2->type = header.type;
+    header2->priority = header.priority;
+    header2->version = header.version;
+    header2->data_pre_padding_len= ceph_le32(0);
+    header2->data_off = header.data_off;
+    header2->ack_seq = ceph_le64(ack_seq);
+    header2->flags = footer.flags;
+    header2->compat_version = header.compat_version;
+    header2->reserved = header.reserved;
+    for(int i=0; i<4; i++){
+      epilogue->crc_values[i] = m_with_data_crc ? segment_bls[i].crc32c(-1) : 0;
+    }
+    epilogue->crc_values[0] = ceph_crc32c(0, reinterpret_cast<const unsigned char*>(header2), sizeof(ceph_msg_header2));
+    epilogue->crc_values[1] = dpdk_msg->get_payload().crc32c();
+    epilogue->crc_values[2] = dpdk_msg->get_middle().crc32c();
+    epilogue->crc_values[3] = dpdk_msg->get_data().crc32c();
+    dpdk_msg->compack_packet_set_header(frag);
+    constexpr int max_frags = 31;
+    Packet* pack = dpdk_msg->get_packet();
+    if(outgoing_packets.back()->nr_frags() + pack->nr_frags() < max_frags){
+      outgoing_packets.back()->append(pack);
+    }
+    else{
+      connection->outgoing_packets.push_back(pack);
+    }
+  }
+  return 0;
+}
 ssize_t ProtocolV2::write_message(Message *m, bool more) {
   FUNCTRACE(cct);
   ceph_assert(connection->center->in_thread());
@@ -633,7 +760,18 @@ void ProtocolV2::reset_compression() {
   session_compression_handlers.rx.reset(nullptr);
   session_compression_handlers.tx.reset(nullptr);
 }
-
+void ProtocolV2::write_for_dpdk(){
+  if(can_write){
+    bool ret = false;
+    DPDKMessage* dpdk_msg; 
+    do{
+      ret = dpdk_out_queue.pop(dpdk_msg);
+      if(ret){
+        write_dpdk_message(dpdk_msg);
+      }
+    }while(ret == true);
+  }
+}
 void ProtocolV2::write_event() {
   ldout(cct, 10) << __func__ << dendl;
   ssize_t r = 0;
@@ -657,10 +795,10 @@ void ProtocolV2::write_event() {
     bool more;
     do {
       if (connection->is_queued()) {
-	if (r = connection->_try_send(); r!= 0) {
-	  // either fails to send or not all queued buffer is sent
-	  break;
-	}
+      	if (r = connection->_try_send(); r!= 0) {
+      	  // either fails to send or not all queued buffer is sent
+      	  break;
+      	}
       }
 
       const auto out_entry = _get_next_outgoing();

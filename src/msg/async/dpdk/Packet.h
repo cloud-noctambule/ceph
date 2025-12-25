@@ -23,6 +23,7 @@
 #ifndef CEPH_MSG_PACKET_H_
 #define CEPH_MSG_PACKET_H_
 
+#include <cstdint>
 #include <vector>
 #include <algorithm>
 #include <iosfwd>
@@ -101,7 +102,7 @@ class Packet {
     char data[internal_data_size]; // only frags[0] may use
     unsigned headroom = internal_data_size; // in data
     // FIXME: share data/frags space
-
+    fragment protocol_header;
     fragment frags[];
 
     explicit impl(size_t nr_frags = default_nr_frags);
@@ -228,6 +229,9 @@ public:
   bool using_internal_data() const {
     return _impl->using_internal_data();
   }
+  uint32_t crc32c(uint32_t crc = 0) const {
+    return 0;  
+  }
   bool get_del_ref_count() const{
     if(_impl) {
       return _impl->_deleter.get_ref_count();
@@ -305,14 +309,14 @@ inline Packet::impl::impl(fragment frag, size_t nr_frags)
     ceph_assert(_allocated_frags > _nr_frags);
   if (frag.size <= internal_data_size) {
     headroom -= frag.size;
-    frags[0] = { data + headroom, frag.size };
+    frags[0] = { data + headroom, frag.size,frag.mbuf_ptr };
   } else {
     auto buf = static_cast<char*>(::malloc(frag.size));
     if (!buf) {
       throw std::bad_alloc();
     }
     deleter d = make_free_deleter(buf);
-    frags[0] = { buf, frag.size };
+    frags[0] = { buf, frag.size,frag.mbuf_ptr };
     _deleter.append(std::move(d));
   }
   std::copy(frag.base, frag.base + frag.size, frags[0].base);

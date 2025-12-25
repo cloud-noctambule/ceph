@@ -127,6 +127,7 @@ public:
 	      const entity_addr_t &listen_addr,
 	      const entity_addr_t &peer_addr);
   int send_message(Message *m) override;
+  int send_dpdk_message(DPDKMessage *dpdk_msg) override;
 
   void send_keepalive() override;
   void mark_down() override;
@@ -185,6 +186,7 @@ private:
 
   // lockfree, only used in own thread
   ceph::buffer::list outgoing_bl;
+  std::queue<packet*> outgoing_packets;
   bool open_write = false;
 
   std::mutex write_lock;

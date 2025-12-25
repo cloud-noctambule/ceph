@@ -10,7 +10,7 @@
 #include "AsyncConnection.h"
 #include "include/buffer.h"
 #include "include/msgr.h"
-
+#include "msg/DPDKMessage.h"
 /*
  * Continuation Helper Classes
  */
@@ -125,6 +125,9 @@ public:
   virtual void fault() = 0;
   // send message
   virtual void send_message(Message *m) = 0;
+  // send dpdk message
+  virtual int send_dpdk_message(DPDKMessage *dpdk_msg) {};
+
   // send keepalive
   virtual void send_keepalive() = 0;
 

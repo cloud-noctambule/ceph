@@ -176,6 +176,10 @@ std::optional<Packet> tcp<InetTraits>::tcb::read()
     _conn.send(p);
     return p.len();
   }
+  virtual ssize_t send_dpdk_packet(Packet *p) override {
+    return send(*p, false);
+  }
+
   virtual ssize_t send(bufferlist &bl, bool more) override {
     auto err = _conn.get_errno();
     if (err < 0)

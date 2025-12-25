@@ -9,7 +9,7 @@
 #include "compression_meta.h"
 #include "compression_onwire.h"
 #include "frames_v2.h"
-
+#include <boost/lockfree/queue.hpp>
 class ProtocolV2 : public Protocol {
 private:
   enum State {
@@ -94,6 +94,8 @@ private:
     Message* m {nullptr};
   };
   std::map<int, std::list<out_queue_entry_t>> out_queue;
+  boost::lockfree::queue<DPDKMessage *> dpdk_out_queue;
+  bool dpdk_share_protocol_header;
   std::list<Message *> sent;
   std::atomic<uint64_t> out_seq{0};
   std::atomic<uint64_t> in_seq{0};
@@ -149,8 +151,11 @@ private:
   void discard_out_queue();
   void reset_session();
   void prepare_send_message(uint64_t features, Message *m);
+  void prepare_send_dpdk_message(uint64_t features, DPDKMessage *dpdk_msg);
+
   out_queue_entry_t _get_next_outgoing();
   ssize_t write_message(Message *m, bool more);
+  ssize_t write_dpdk_message(DPDKMessage *dpdk_msg);
   void handle_message_ack(uint64_t seq);
   void reset_compression();
 
@@ -212,6 +217,7 @@ public:
   virtual void stop() override;
   virtual void fault() override;
   virtual void send_message(Message *m) override;
+  virtual int send_dpdk_message(DPDKMessage *dpdk_msg) override;
   virtual void send_keepalive() override;
 
   virtual void read_event() override;

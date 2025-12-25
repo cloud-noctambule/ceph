@@ -112,7 +112,10 @@ class PosixConnectedSocketImpl final : public ConnectedSocketImpl {
     }
     return (ssize_t)sent;
   }
-
+  ssize_t send_dpdk_packet(Packet *p) override{
+    ceph_abort();
+    return 0;
+  }
   ssize_t send(ceph::buffer::list &bl, bool more) override {
     size_t sent_bytes = 0;
     auto pb = std::cbegin(bl.buffers());

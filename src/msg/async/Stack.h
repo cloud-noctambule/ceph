@@ -23,7 +23,7 @@
 #include "msg/async/Event.h"
 #include "msg/msg_types.h"
 #include <string>
-
+#include "msg/async/dpdk/Packet.h"
 class Worker;
 class ConnectedSocketImpl {
  public:
@@ -31,6 +31,7 @@ class ConnectedSocketImpl {
   virtual int is_connected() = 0;
   virtual ssize_t read(char*, size_t) = 0;
   virtual ssize_t send(ceph::buffer::list &bl, bool more) = 0;
+  virtual ssize_t send_dpdk_packet(Packet *p) = 0;
   virtual void shutdown() = 0;
   virtual void close() = 0;
   virtual int fd() const = 0;
@@ -101,6 +102,10 @@ class ConnectedSocket {
   /// Gets an object that sends data to the remote endpoint.
   ssize_t send(ceph::buffer::list &bl, bool more) {
     return _csi->send(bl, more);
+  }
+  /// Send a DPDK packet.
+  ssize_t send_dpdk_packet(Packet *p) {
+    return _csi->send_dpdk_packet(p);
   }
   /// Disables output to the socket.
   ///

@@ -315,6 +315,14 @@ ssize_t AsyncConnection::write(ceph::buffer::list &bl,
     return r;
 }
 
+ssize_t AsyncConnection::_try_send_dpdk(){
+  if (outgoing_packets.empty()) {
+    return 0;
+  }
+  cs.send_dpdk_packet(outgoing_packets.front());
+  outgoing_packets.pop();
+  return 0;
+}
 // return the remaining bytes, it may larger than the length of ptr
 // else return < 0 means error
 ssize_t AsyncConnection::_try_send(bool more)
@@ -534,6 +542,13 @@ void AsyncConnection::accept(ConnectedSocket socket,
   protocol->accept();
   // rescheduler connection in order to avoid lock dep
   center->dispatch_event_external(read_handler);
+}
+int AsyncConnection::send_dpdk_message(DPDKMessage *dpdk_msg)
+{
+  dpdk_msg->set_connection(this);
+  dpdk_msg->get_header().src = async_msgr->get_myname();
+  logger->inc(l_msgr_send_messages);
+  return protocol->send_dpdk_message(dpdk_msg);
 }
 
 int AsyncConnection::send_message(Message *m)

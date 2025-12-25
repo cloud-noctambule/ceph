@@ -15,6 +15,7 @@
 #ifndef CEPH_CONNECTION_H
 #define CEPH_CONNECTION_H
 
+#include <cstdint>
 #include <stdlib.h>
 #include <ostream>
 
@@ -51,6 +52,9 @@ struct Connection : public RefCountedObjectSafe {
   bool anon = false;  ///< anonymous outgoing connection
 private:
   uint64_t features = 0;
+  //用于快速判断是否需要重新编码
+  //在DPDK的链路中，使用了无锁的路径，这里通过CAS来判断
+  std::atomic<uint64_t> features_dpdk_use = 0;
 public:
   bool is_loopback = false;
   bool failed = false; // true if we are a lossy connection that has failed.
@@ -118,7 +122,18 @@ public:
    * @return 0 on success, or -errno on failure.
    */
   virtual int send_message(Message *m) = 0;
-
+  /**
+   * Queue the given DPDKMessage to send out on the given Connection.
+   * Success in this function does not guarantee Message delivery, only
+   * success in queueing the Message. Other guarantees may be provided based
+   * on the Connection policy.
+   *
+   * @param dpdk_msg The DPDKMessage to send. The Messenger consumes a single reference
+   * when you pass it in.
+   *
+   * @return 0 on success, or -errno on failure.
+  */
+  virtual int send_dpdk_message(DPDKMessage *dpdk_msg) = 0;
   virtual int send_message2(MessageRef m)
   {
     return send_message(m.detach()); /* send_message(Message *m) consumes a reference */
@@ -196,6 +211,7 @@ public:
   void set_peer_addrs(const entity_addrvec_t& av) { peer_addrs = av; }
 
   uint64_t get_features() const { return features; }
+  uint64_t get_features_fast() const { return features_dpdk_use.load(); }
   bool has_feature(uint64_t f) const { return features & f; }
   bool has_features(uint64_t f) const {
     return (features & f) == f;

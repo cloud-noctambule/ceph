@@ -21,6 +21,7 @@
 #include "MOSDFastDispatchOp.h"
 #include "include/ceph_features.h"
 #include "common/hobject.h"
+#include "msg/async/dpdk/Packet.h"
 
 /*
  * OSD op
@@ -217,6 +218,9 @@ public:
     add_simple_op(CEPH_OSD_OP_WRITE, off, len);
     data = std::move(bl);
     header.data_off = off;
+  }
+  void write(uint64_t off, uint64_t len, Packet& dpdk_pkt){
+    
   }
   void writefull(ceph::buffer::list& bl) {
     add_simple_op(CEPH_OSD_OP_WRITEFULL, 0, bl.length());
