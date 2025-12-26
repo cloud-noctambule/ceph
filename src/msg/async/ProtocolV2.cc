@@ -634,13 +634,16 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
     epilogue->crc_values[3] = dpdk_msg->get_data().crc32c();
     dpdk_msg->compack_packet_set_header(frag);
     constexpr int max_frags = 31;
-    Packet* pack = dpdk_msg->get_packet();
+    Packet* pack = dpdk_msg->get_compacked_packet();
     if(outgoing_packets.back()->nr_frags() + pack->nr_frags() < max_frags){
       outgoing_packets.back()->append(pack);
     }
     else{
       connection->outgoing_packets.push_back(pack);
     }
+  }else{
+    //TO_DO: 聚合多个Message的头部到一起，从而减少开销
+    ceph_abort();
   }
   return 0;
 }
@@ -1221,7 +1224,14 @@ CtPtr ProtocolV2::read_frame() {
   rx_preamble.clear();
   rx_epilogue.clear();
   rx_segments_data.clear();
-
+  rx_preable_epilogue_header_packet.reset();
+  rx_segment_packet.reset();
+  if(dpdk_use){
+    if(connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,Tag::DPDK_MESSAGE)){
+      // read as DPDKMessage
+      return 
+    }
+  }
   return READ(rx_frame_asm.get_preamble_onwire_len(),
               handle_read_frame_preamble_main);
 }

@@ -101,7 +101,7 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
   }
 
   // 新增 zero-copy read 接口，read packet
-  ssize_t read(std::optional<Packet>& ret, size_t len) {
+  ssize_t read(Packet& ret, size_t len) override {
     auto err = _conn.get_errno();
     if (err <= 0)
       return err;
@@ -118,8 +118,8 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
     if( read_len == 0 ) return -EAGAIN;
     //share函数会自动的share里面的delter
     //deleter本身自带了引用计数
-    ret = _buf->share(_cur_off, std::min(len, (size_t)read_len));
-    _cur_off += ret->len();
+    ret.append(_buf->share(_cur_off, std::min(len, (size_t)read_len)));
+    _cur_off += read_len;
     if (_cur_off >= _buf->len()) {
       _buf.reset();
       _cur_off = 0;
@@ -128,8 +128,8 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
   }
 private:
 /*
-这个函数应该调用的是这个接口
-std::optional<Packet> tcp<InetTraits>::tcb::read()
+这个函数应该调用的是
+std::optional<Packet> tcp<InetTraits>::tcb::read()这个接口
 在这里面会将前面的一些Packet进行合并，只返回一个Packet
 */
   ssize_t zero_copy_read(bufferptr &data) {

@@ -14,6 +14,7 @@
  *
  */
 
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "include/Context.h"
@@ -28,6 +29,7 @@
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
 #include "common/EventTrace.h"
+#include "msg/async/dpdk/Packet.h"
 
 // Constant to limit starting sequence number to 2^31.  Nothing special about it, just a big number.  PLR
 #define SEQ_MASK  0x7fffffff
@@ -276,7 +278,23 @@ ssize_t AsyncConnection::read_until(unsigned len, char *p)
                              << len - state_offset << " bytes" << dendl;
   return len - state_offset;
 }
-
+/*  这个接口提供的是fully语义,用于保证上层读取的len字节数据
+*/
+ssize_t AsyncConnection::read_until_dpdk(Packet& res, unsigned len){
+  ssize_t read_len = 0;
+  ssize_t left = len;
+  while(left > 0){
+    ssize_t r = cs.read(res, left);
+    if (r < 0) {
+      ldout(async_msgr->cct, 1) << __func__ << " reading from fd=" << cs.fd()
+                          << " : "<< r << " " << r << dendl;
+      return r;
+    }
+    read_len+=r;
+    left-=r;
+  }
+  return read_len;
+}
 /* return -1 means `fd` occurs error or closed, it should be closed
  * return 0 means EAGAIN or EINTR */
 ssize_t AsyncConnection::read_bulk(char *buf, unsigned len)

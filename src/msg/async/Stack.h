@@ -30,6 +30,7 @@ class ConnectedSocketImpl {
   virtual ~ConnectedSocketImpl() {}
   virtual int is_connected() = 0;
   virtual ssize_t read(char*, size_t) = 0;
+  virtual ssize_t read(Packet& ret, size_t len) = 0;
   virtual ssize_t send(ceph::buffer::list &bl, bool more) = 0;
   virtual ssize_t send_dpdk_packet(Packet *p) = 0;
   virtual void shutdown() = 0;
@@ -97,6 +98,10 @@ class ConnectedSocket {
   ssize_t read(char* buf, size_t len) {
     return _csi->read(buf, len);
   }
+  //for DPDK use, We get through the zero-copy read interface
+  virtual ssize_t read(Packet& ret, size_t len) {
+    return _csi->read(ret, len);
+  };
   /// Gets the output stream.
   ///
   /// Gets an object that sends data to the remote endpoint.

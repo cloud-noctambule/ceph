@@ -9,7 +9,9 @@
 #include "compression_meta.h"
 #include "compression_onwire.h"
 #include "frames_v2.h"
+#include "msg/async/dpdk/Packet.h"
 #include <boost/lockfree/queue.hpp>
+#include <sys/types.h>
 class ProtocolV2 : public Protocol {
 private:
   enum State {
@@ -96,6 +98,7 @@ private:
   std::map<int, std::list<out_queue_entry_t>> out_queue;
   boost::lockfree::queue<DPDKMessage *> dpdk_out_queue;
   bool dpdk_share_protocol_header;
+  bool dpdk_use;
   std::list<Message *> sent;
   std::atomic<uint64_t> out_seq{0};
   std::atomic<uint64_t> in_seq{0};
@@ -111,6 +114,9 @@ private:
   ceph::bufferlist rx_epilogue;
   ceph::msgr::v2::segment_bls_t rx_segments_data;
   ceph::msgr::v2::Tag next_tag;
+  Packet rx_preable_epilogue_header_packet;
+  Packet rx_segment_packet;
+  ssize_t dpdk_tag_offset;
   utime_t backoff;  // backoff time
   utime_t recv_stamp;
   utime_t throttle_stamp;

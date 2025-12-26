@@ -61,7 +61,7 @@ protected:
   Packet payload;  // "front" unaligned blob
   Packet middle;   // "middle" unaligned blob
   Packet data;     // data payload (page-alignment will be preserved where possible)
-
+  bool packet_compacked = false;
   /* recv_stamp is set when the Messenger starts reading the
    * Message off the wire */
   utime_t recv_stamp;
@@ -136,7 +136,14 @@ public:
   DPDKMessage *get() {
     return static_cast<DPDKMessage *>(RefCountedObject::get());
   }
-
+  void compack_packet_set_header(fragment& frag) {
+    packet_compacked = true;
+    payload.append(std::move(middle)).append(std::move(data));
+    payload.set_protocol_header(frag);
+  }
+  Packet* get_compacked_packet() {
+    return packet_compacked ? &payload : nullptr;
+  }
 protected:
   ~DPDKMessage() override {
     if (byte_throttler) {

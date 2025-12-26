@@ -229,6 +229,7 @@ public:
   // preamble inline buffer, either fully or partially.
   uint32_t get_preamble_onwire_len() const {
     if (m_is_rev1 && m_crypto->rx) {
+      //in DPDK, do not use this 
       return FRAME_PREAMBLE_WITH_INLINE_SIZE + get_auth_tag_len();
     }
     return sizeof(preamble_block_t);

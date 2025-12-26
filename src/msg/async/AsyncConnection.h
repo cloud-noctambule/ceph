@@ -25,6 +25,7 @@
 #include <map>
 #include <functional>
 #include <optional>
+#include <sys/types.h>
 
 #include "auth/AuthSessionHandler.h"
 #include "common/ceph_time.h"
@@ -54,6 +55,7 @@ class AsyncConnection : public Connection {
   ssize_t read(unsigned len, char *buffer,
                std::function<void(char *, ssize_t)> callback);
   ssize_t read_until(unsigned needed, char *p);
+  ssize_t read_until_dpdk(Packet& res, unsigned len);
   ssize_t read_bulk(char *buf, unsigned len);
 
   ssize_t write(ceph::buffer::list &bl, std::function<void(ssize_t)> callback,
