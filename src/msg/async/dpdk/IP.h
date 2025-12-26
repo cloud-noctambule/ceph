@@ -310,6 +310,7 @@ class ipv4 {
   }
   void send(ipv4_address to, ip_protocol_num proto_num, Packet p, ethernet_address e_dst);
   tcp<ipv4_traits>& get_tcp() { return *_tcp._tcp; }
+  DPDKDevice& get_device() { return _netif.get_device(); }
   void register_l4(proto_type id, ip_protocol* handler);
   const hw_features& get_hw_features() const;
   static bool needs_frag(Packet& p, ip_protocol_num proto_num, hw_features hw_features) {

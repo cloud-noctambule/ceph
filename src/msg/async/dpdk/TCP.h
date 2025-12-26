@@ -612,6 +612,7 @@ class tcp {
     uint32_t data_segment_acked(tcp_sequence seg_ack);
     bool segment_acceptable(tcp_sequence seg_seq, unsigned seg_len);
     void init_from_options(tcp_hdr* th, uint8_t* opt_start, uint8_t* opt_end);
+    DPDKDevice& get_device() { return _tcp.get_device(); }
     friend class connection;
 
     friend class C_handle_delayed_ack;
@@ -679,6 +680,11 @@ class tcp {
       return _tcb->peek_sent_available();
     }
     int is_connected() const { return _tcb->is_connected(); }
+    DPDKDevice& get_device() { return _tcb->get_device(); }
+    uint16_t get_queue_id() const { 
+      // 这里假设使用队列0，实际应该根据连接获取正确的队列ID
+      return 0;
+    }
   };
   class listener {
     tcp& _tcp;
@@ -746,6 +752,7 @@ class tcp {
   listener listen(uint16_t port, size_t queue_length = 100);
   connection connect(const entity_addr_t &addr);
   const hw_features& get_hw_features() const { return _inet._inet.get_hw_features(); }
+  DPDKDevice& get_device() { return _inet._inet.get_device(); }
   void poll_tcb(const ethernet_address &dst, lw_shared_ptr<tcb> tcb) {
     _poll_tcbs.emplace_back(std::move(tcb), dst);
   }

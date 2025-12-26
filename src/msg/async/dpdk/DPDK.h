@@ -31,6 +31,7 @@
 #include <rte_ethdev.h>
 #include <rte_ether.h>
 #include <rte_malloc.h>
+#include <rte_mempool.h>
 #include <rte_version.h>
 
 #include "include/page.h"
@@ -452,8 +453,32 @@ class DPDKQueuePair {
       rte_mempool_put_bulk(_pool, (void**)_ring.data(),
                            _ring.size());
     }
+    /** */
+    /**
+     * @brief Get a fragment from the factory's cache.
+     *
+     * @param frag Fragment to fill
+     *
+     * @return true if a fragment has been successfully retrieved
+     * @return false if there are no free tx_buf's
+     */
+    bool get_a_frag(fragment& frag) {
+      if(use_lock){
 
-
+      }
+      else{
+        tx_buf* pkt = nullptr;
+        bool ret = _ring_share.pop(pkt);
+        if (!ret) {
+          return false;
+        }
+        rte_mbuf* buf = pkt->rte_mbuf_p();
+        frag.base = rte_pktmbuf_mtod(buf, char*);
+        frag.size = rte_pktmbuf_data_len(buf);
+        frag.mbuf_ptr = buf;
+      }
+      return true;
+    }
     /**
      * @note Should not be called if there are no free tx_buf's
      *
@@ -462,12 +487,19 @@ class DPDKQueuePair {
     tx_buf* get() {
       tx_buf *pkt;
       if( is_force_zero_copy_enabled ) {
-        if (_ring.empty()) {
-          gc();
-          return nullptr;
+        if(use_lock){
+          if(!_ring.empty()){
+            pkt = _ring.back();
+            _ring.pop_back();
+            return pkt;
+          }
+          bool ret = _ring_share.pop(pkt);
+          if (!ret) {
+            gc();
+            return nullptr;
+          }
         }
-        pkt = _ring.back();
-        _ring.pop_back();
+
       }
       else{
         // Take completed from the HW first
@@ -494,7 +526,22 @@ class DPDKQueuePair {
 
     void put(tx_buf* buf) {
       buf->reset_zc();
-      _ring.push_back(buf);
+      if(is_force_zero_copy_enabled){
+        if(use_lock){
+          _ring.push_back(buf);
+        }{
+          bool ret = _ring_share.push(buf);
+          if (!ret) {
+            //eighter put it back to some other queue;
+            // ceph_abort();
+            _ring.push_back(buf);
+          }
+        }
+
+      }
+      else{
+        _ring.push_back(buf);
+      }
     }
 
     unsigned ring_size() const {
@@ -546,7 +593,17 @@ class DPDKQueuePair {
      */
     void init_factory() {
       while (rte_mbuf* mbuf = rte_pktmbuf_alloc(_pool)) {
-        _ring.push_back(new(tx_buf::me(mbuf)) tx_buf{*this});
+        if(use_lock){
+          _ring.push_back(new(tx_buf::me(mbuf)) tx_buf{*this});
+        }
+        else{
+          bool ret = _ring_share.push(new(tx_buf::me(mbuf)) tx_buf{*this});
+          if (!ret) {
+            //eighter put it back to some other queue;
+            ceph_abort();
+            _ring.push_back(new(tx_buf::me(mbuf)) tx_buf{*this});
+          }
+        }
       }
     }
 
@@ -567,8 +624,13 @@ class DPDKQueuePair {
     CephContext *cct;
     bool is_force_zero_copy_enabled;
     std::vector<tx_buf*> _ring;
+    boost::lockfree::queue<tx_buf*> _ring_share;
     std::list<tx_buf*> _later_to_free;
     rte_mempool* _pool = nullptr;
+    static bool use_lock;
+    const static int local_cache_size;
+    static thread_local std::vector<rte_mbuf*> _local_cache;
+
   };
 
  public:
@@ -593,6 +655,7 @@ class DPDKQueuePair {
 
   DPDKDevice& port() const { return *_dev; }
   tx_buf* get_tx_buf() { return _tx_buf_factory.get(); }
+  bool get_a_frag(fragment& frag) { return _tx_buf_factory.get_a_frag(frag); }
 
   void handle_stats();
 
@@ -924,6 +987,7 @@ class DPDKDevice {
     ceph_assert(_queues[i]);
     _queues[i].reset();
   }
+  DPDKQueuePair& get_queue(uint16_t qid) { return *_queues[qid]; }
   template <typename Func>
   unsigned forward_dst(unsigned src_cpuid, Func&& hashfn) {
     auto& qp = queue_for_cpu(src_cpuid);

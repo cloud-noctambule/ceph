@@ -27,12 +27,16 @@ using namespace std;
 #include "common/Cycles.h"
 #include "global/global_init.h"
 #include "msg/Messenger.h"
+#include "msg/DPDKMessage.h"
+#include "msg/async/dpdk/Packet.h"
 #include "messages/MOSDOp.h"
 #include "auth/DummyAuth.h"
 
 #include <atomic>
 #define NUM_CLIENT_THREAD_MODELS 3
-const char* ClientThreadModelNames[] = {
+static bool use_dpdk_zero_copy;
+static bool query_dpdk_recv_queue;
+const char* ClientThreadModaelNmes[] = {
     "ONE_THREAD_ONE_SERVER",//一个一个messenger，一个连接，一个服务器，一个线程
     "ONE_THREAD_ALL_SERVER",//一个messenger，多个连接，多个服务器，一个线程
     "MULTI_THREAD_SHARE_SERVER"//一个messenger，一个连接，一个服务器，多个线程
@@ -83,6 +87,7 @@ class MessengerClient {
     pg_t pgid;
     int msg_len;
     bufferlist data;
+    char* pure_data;
     int ops;
     uint64_t cid;//cid已经左移48位，避免后面每次移动
     int mode;
@@ -112,6 +117,8 @@ class MessengerClient {
       bufferptr ptr(msg_len);
       memset(ptr.c_str(), 0, msg_len);
       data.append(ptr);
+      pure_data = malloc(msg_len);
+      memset(pure_data, 0, msg_len);
       this->cid=cid;
       this->cid<<=48;
       record_start_pos.resize(record.size(),cid*ops);
@@ -120,7 +127,7 @@ class MessengerClient {
       delete conns;
       delete sid;
     }
-    void *entry() override {
+    void entry_for_normal(int total_ops){
       std::unique_lock locker{lock};
       for (int i = 0; i < ops; ++i) {
         if (inflight > uint64_t(concurrent)) {
@@ -140,6 +147,38 @@ class MessengerClient {
         //cerr << __func__ << " send m=" << m << std::endl;
       }
       locker.unlock();
+    }
+    void entry_for_dpdk_polling(int total_ops){
+      std::vector<fragment> vecs;
+      for (int i = 0; i < total_ops; ++i) {
+        while (inflight > uint64_t(concurrent)) {
+          usleep(1);
+        }
+        DPDKMessage *dpdk_msg = new DPDKMessage();
+        int sid_index = i % sid->size();
+        dpdk_msg->set_tid(make_tid(record_start_pos[sid_index],sid_index));
+        int to_send_data_off = 0;
+        while(to_send_data_off <= msg_len){
+          vecs.emplace_back();
+          bool ret =(*conns)[sid_index]->get_a_frag(vecs.back());
+          int to_copy = min(msg_len - to_send_data_off,vecs.back().len);
+          memcopy(vecs.back().data,pure_data+to_send_data_off,to_copy);
+          to_send_data_off +=to_copy;
+        }
+        dpdk_msg->set_data(std::move(Packet(vecs)));
+        (*conns)[sid_index]->send_dpdk_message(dpdk_msg);
+        inflight++;
+        record[(*sid)[sid_index]][record_start_pos[sid_index]++]=Cycles::rdtsc();//可能有点误差
+        vecs.clear();
+      }
+    }
+    void *entry() override {
+      if(!use_dpdk_zero_copy && !query_dpdk_recv_queue){
+        entry_for_normal(ops);
+      }
+      else{
+        entry_for_dpdk_polling(ops);
+      }
       uint64_t ori_cid = cid>>48;
       if(mode == ClientThreadModel::ONE_THREAD_ALL_SERVER || mode == ClientThreadModel::ONE_THREAD_ONE_SERVER)
         msgr->shutdown();
@@ -354,12 +393,18 @@ vector<bool>* MessengerClient::ClientThread::client_completion = nullptr;
 ceph::mutex MessengerClient::ClientThread::client_completion_lock = ceph::make_mutex("MessengerClient::client_completion_lock");
 void MessengerClient::ClientDispatcher::ms_fast_dispatch(Message *m) {
   // usleep(think_time);
-  m->put();
   uint64_t recv_time = Cycles::rdtsc();
-  std::lock_guard l{thread->lock};
-  thread->set_record(m->get_tid(),recv_time);
-  thread->inflight--;
-  thread->cond.notify_all();
+  if(!query_dpdk_recv_queue){
+    m->put();
+    std::lock_guard l{thread->lock};
+    thread->set_record(m->get_tid(),recv_time);
+    thread->inflight--;
+    thread->cond.notify_all();
+  }
+  else{
+    thread->set_record(m->get_tid(),recv_time);
+    thread->inflight--;
+  }
 }
 
 

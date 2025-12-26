@@ -30,6 +30,7 @@
 #include "include/types.h"
 #include "common/item_history.h"
 #include "msg/MessageRef.h"
+#include "msg/async/dpdk/Packet.h"
 
 // ======================================================
 
@@ -134,6 +135,7 @@ public:
    * @return 0 on success, or -errno on failure.
   */
   virtual int send_dpdk_message(DPDKMessage *dpdk_msg) = 0;
+  virtual bool get_a_frag(fragment& frag) = 0;
   virtual int send_message2(MessageRef m)
   {
     return send_message(m.detach()); /* send_message(Message *m) consumes a reference */

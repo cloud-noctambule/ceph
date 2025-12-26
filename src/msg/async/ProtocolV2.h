@@ -9,6 +9,8 @@
 #include "compression_meta.h"
 #include "compression_onwire.h"
 #include "frames_v2.h"
+#include "msg/DPDKMessage.h"
+#include "msg/Message.h"
 #include "msg/async/dpdk/Packet.h"
 #include <boost/lockfree/queue.hpp>
 #include <sys/types.h>
@@ -116,6 +118,11 @@ private:
   ceph::msgr::v2::Tag next_tag;
   Packet rx_preable_epilogue_header_packet;
   Packet rx_segment_packet;
+  boost::lockfree::queue<DPDKMessage *> dpdk_message_to_decodes;
+  std::vector<DPDKMessage*> temp_container;
+  bool dpdk_work_throught_encode;
+  Message* dpdk_msg_wrapper = nullptr;
+  DPDKMessage* pre_msg = nullptr;
   ssize_t dpdk_tag_offset;
   utime_t backoff;  // backoff time
   utime_t recv_stamp;

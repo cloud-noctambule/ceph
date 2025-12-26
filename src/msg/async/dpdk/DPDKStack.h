@@ -69,6 +69,35 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
     return _conn.is_connected();
   }
   virtual void set_priority(int sd, int prio, int domain) {} //ConnectedSocketImpl新增了一个这个接口
+  virtual bool get_a_frag(fragment& frag, int worker_id) override {
+    auto& device = _conn.get_device();
+    return device.get_queue(uint16_t(worker_id)).get_a_frag(frag, worker_id);
+  }
+  /**
+   * @brief fast_peek_dpdk_packet_tag 从当前缓存中 peek 一个 dpdk 包的 tag
+   * 
+   * @param tag_offset tag 偏移量
+   * @param tag_type tag 类型
+   * @return int 0 成功，-EAGAIN 缓存为空，-EINVAL tag 偏移量超出缓存范围
+   */
+  virtual int fast_peek_dpdk_packet_tag(uint32_t tag_offset, char tag_type) override {
+    if (!_buf) {
+      _buf = std::move(_conn.read());
+      //make sure internal data only
+      ceph_assert(_buf->using_internal_data() == false); 
+      if (!_buf)
+        return -EAGAIN;
+      _cur_off = 0;
+    }
+    if(_cur_off + tag_offset >= _buf->len()){
+      auto temp_buf = std::move(_conn.read());
+      if (!temp_buf)
+        return -EAGAIN;
+      _buf->append(std::move(*temp_buf));
+    }
+
+    return _buf->peek_char_equal(_cur_off + tag_offset, tag_type) ? 0 : -EINVAL;
+  }
   virtual ssize_t read(char *buf, size_t len) override {
     size_t left = len;
     ssize_t r = 0;
@@ -109,7 +138,7 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
     if (!_buf) {
       _buf = std::move(_conn.read());
       //make sure internal data only
-      ceph_assert(_buf->using_internal_data() == true); 
+      ceph_assert(_buf->using_internal_data() == false); 
       if (!_buf)
         return -EAGAIN;
       _cur_off = 0;

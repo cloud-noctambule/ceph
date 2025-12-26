@@ -37,6 +37,8 @@ class ConnectedSocketImpl {
   virtual void close() = 0;
   virtual int fd() const = 0;
   virtual void set_priority(int sd, int prio, int domain) = 0;
+  virtual bool get_a_frag(fragment& frag, int worker_id) = 0;
+  virtual int fast_peek_dpdk_packet_tag(uint32_t tag_offset, char tag_type) {return false;};
 };
 
 class ConnectedSocket;
@@ -72,6 +74,7 @@ class ServerSocketImpl {
 /// two endpoints, a local endpoint and a remote endpoint.
 class ConnectedSocket {
   std::unique_ptr<ConnectedSocketImpl> _csi;
+  
 
  public:
   /// Constructs a \c ConnectedSocket not corresponding to a connection
@@ -137,12 +140,16 @@ class ConnectedSocket {
   }
 
   void set_priority(int sd, int prio, int domain) {
-    _csi->set_priority(sd, prio, domain);
+    return _csi->set_priority(sd, prio, domain);
   }
-
+  bool get_a_frag(fragment& frag) {
+    return _csi->get_a_frag(frag, worker_id);
+  }
   explicit operator bool() const {
     return _csi.get();
   }
+  public:
+  int worker_id = -1;
 };
 /// @}
 

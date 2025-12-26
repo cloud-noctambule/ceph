@@ -184,6 +184,15 @@ class Packet {
   explicit Packet(std::unique_ptr<impl>&& impl) : _impl(std::move(impl)) {}
   std::unique_ptr<impl> _impl;
 public:
+  // peek char at offset
+  bool peek_char_equal(unsigned offset, char c) const {
+    int idx = 0;
+    while(idx < _impl->_nr_frags && offset >= frag(idx).size) {
+      offset -= frag(idx).size;
+      idx++;
+    }
+    return idx < _impl->_nr_frags && offset < frag(idx).size && frag(idx).base[offset] == c;
+  }
   static Packet from_static_data(const char* data, size_t len) {
     return {fragment{const_cast<char*>(data), len}, deleter()};
   }

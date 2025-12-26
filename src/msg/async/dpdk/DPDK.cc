@@ -1064,7 +1064,7 @@ bool DPDKQueuePair::poll_rx_once()
 }
 
 DPDKQueuePair::tx_buf_factory::tx_buf_factory(CephContext *c,
-        DPDKDevice *dev, uint8_t qid): cct(c)
+        DPDKDevice *dev, uint8_t qid): cct(c), _ring_share(mbufs_per_queue_tx)
 {
   is_force_zero_copy_enabled = cct->_conf.get_val<bool>("ms_dpdk_force_zero_copy");
   std::string name = std::string(pktmbuf_pool_name) + std::to_string(qid) + "_tx";

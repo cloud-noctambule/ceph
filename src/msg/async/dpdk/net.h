@@ -132,6 +132,7 @@ class interface {
   const rss_key_type& rss_key() const;
   uint16_t hw_queues_count() const;
   void arp_learn(ethernet_address l2, ipv4_address l3);
+  DPDKDevice& get_device() { return *_dev; }
   friend class l3_protocol;
 };
 

@@ -58,10 +58,11 @@ public:
 protected:
   ceph_msg_header  header;      // headerelope
   ceph_msg_footer  footer;
-  Packet payload;  // "front" unaligned blob
-  Packet middle;   // "middle" unaligned blob
-  Packet data;     // data payload (page-alignment will be preserved where possible)
+  std::optional<Packet> payload;  // "front" unaligned blob
+  std::optional<Packet> middle;   // "middle" unaligned blob
+  std::optional<Packet> data;     // data payload (page-alignment will be preserved where possible)
   bool packet_compacked = false;
+  std::optional<Packet> packed_packet;
   /* recv_stamp is set when the Messenger starts reading the
    * Message off the wire */
   utime_t recv_stamp;
@@ -138,16 +139,34 @@ public:
   }
   void compack_packet_set_header(fragment& frag) {
     packet_compacked = true;
-    payload.append(std::move(middle)).append(std::move(data));
-    payload.set_protocol_header(frag);
+    if(payload.has_value()){
+      packed_packet = std::move(payload.value());
+      if(middle.has_value())
+        packed_packet->append(std::move(middle.value()));
+      if(data.has_value())
+        packed_packet->append(std::move(data.value()));
+    }
+    else if(middle.has_value()){
+      packed_packet = std::move(middle.value());
+      if(data.has_value())
+        packed_packet->append(std::move(data.value()));
+    }
+    else if(data.has_value())
+      packed_packet = std::move(data.value());
+    packed_packet->set_protocol_header(frag);
   }
   Packet* get_compacked_packet() {
-    return packet_compacked ? &payload : nullptr;
+    return packet_compacked ? &packed_packet.value() : nullptr;
   }
 protected:
   ~DPDKMessage() override {
     if (byte_throttler) {
-      byte_throttler->put(payload.len() + middle.len() + data.len());
+      if(payload.has_value())
+        byte_throttler->put(payload.value().len());
+      if(middle.has_value())
+        byte_throttler->put(middle.value().len());
+      if(data.has_value())
+        byte_throttler->put(data.value().len());
     }
     release_message_throttle();
     trace.event("message destructed");
@@ -201,17 +220,20 @@ public:
 
   void clear_payload() {
     if (byte_throttler) {
-      byte_throttler->put(payload.len() + middle.len());
+      if(payload.has_value())
+        byte_throttler->put(payload.value().len());
+      if(middle.has_value())
+        byte_throttler->put(middle.value().len());
     }
-    payload = Packet();
-    middle = Packet();
+    payload = std::nullopt;
+    middle = std::nullopt;
   }
 
   virtual void clear_buffers() {}
   void clear_data() {
-    if (byte_throttler)
-      byte_throttler->put(data.len());
-    data = Packet();
+    if (byte_throttler && data.has_value())
+      byte_throttler->put(data.value().len());
+    data = std::nullopt;
     clear_buffers(); // let subclass drop buffers as well
   }
   void release_message_throttle() {
@@ -220,42 +242,45 @@ public:
     msg_throttler = nullptr;
   }
 
-  bool empty_payload() const { return payload.len() == 0; }
-  Packet& get_payload() { return payload; }
-  const Packet& get_payload() const { return payload; }
+  bool empty_payload() const { return payload.has_value() && payload.value().len() == 0; }
+  Packet& get_payload() { return payload.value(); }
+  const Packet& get_payload() const { return payload.value(); }
   void set_payload(Packet&& pkt) {
     if (byte_throttler)
-      byte_throttler->put(payload.len());
+      byte_throttler->put(payload.value().len());
     payload = std::move(pkt);
     if (byte_throttler)
-      byte_throttler->take(payload.len());
+      byte_throttler->take(payload.value().len());
   }
 
   void set_middle(Packet&& pkt) {
     if (byte_throttler)
-      byte_throttler->put(middle.len());
+      byte_throttler->put(middle.value().len());
     middle = std::move(pkt);
     if (byte_throttler)
-      byte_throttler->take(middle.len());
+      byte_throttler->take(middle.value().len());
   }
-  Packet& get_middle() { return middle; }
+  Packet& get_middle() { return middle.value(); }
 
+  bool has_data() const { return data.has_value(); }
+  bool has_payload() const { return payload.has_value(); }
+  bool has_middle() const { return middle.has_value(); }
   void set_data(const Packet& pkt) {
     if (byte_throttler)
-      byte_throttler->put(data.len());
-    data = pkt;
+      byte_throttler->put(data.value().len());
+    data = std::move(pkt);
     if (byte_throttler)
-      byte_throttler->take(data.len());
+      byte_throttler->take(data.value().len());
   }
 
-  const Packet& get_data() const { return data; }
-  Packet& get_data() { return data; }
+  const Packet& get_data() const { return data.value(); }
+  Packet& get_data() { return data.value(); }
   void claim_data(Packet& pkt) {
     if (byte_throttler)
-      byte_throttler->put(data.len());
-    pkt = std::move(data);
+      byte_throttler->put(data.value().len());
+    pkt = std::move(data.value());
   }
-  uint32_t get_data_len() const { return data.len(); }
+  uint32_t get_data_len() const { return data.value().len(); }
 
   void set_recv_stamp(utime_t t) { recv_stamp = t; }
   const utime_t& get_recv_stamp() const { return recv_stamp; }
@@ -331,9 +356,9 @@ public:
   }
 
   // virtual bits
-  virtual void decode_payload() = 0;
-  virtual void encode_payload(uint64_t features) = 0;
-  virtual std::string_view get_type_name() const = 0;
+  virtual void decode_payload(){};
+  virtual void encode_payload(uint64_t features){};
+  virtual std::string_view get_type_name() const { return "DPDKMessage"; }
   virtual void print(std::ostream& out) const {
     out << get_type_name() << " magic: " << magic;
   }

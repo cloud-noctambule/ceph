@@ -588,8 +588,9 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
   if(!dpdk_share_protocol_header){
     //在这种情况下，我们直接获取一个rte_mbuf来装填Message的头
     fragment frag;
-    int frag_size = get_a_frag(frag)//TO_DO
-    if(frag_size < preabmble_epilogue_header_size){
+    bool ret = connection->get_a_frag(frag);//TO_DO
+    int frag_size = frag.size;
+    if( !ret ||frag_size < preabmble_epilogue_header_size){
       ldout(cct, 0) << __func__ << " error frag_size < preabmble_epilogue_header_size" << dendl;
       ceph_abort();
       return -EINVAL;
@@ -626,7 +627,8 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
     header2->compat_version = header.compat_version;
     header2->reserved = header.reserved;
     for(int i=0; i<4; i++){
-      epilogue->crc_values[i] = m_with_data_crc ? segment_bls[i].crc32c(-1) : 0;
+      // epilogue->crc_values[i] = m_with_data_crc ? segment_bls[i].crc32c(-1) : 0;
+      epilogue->crc_values[i] =  0;
     }
     epilogue->crc_values[0] = ceph_crc32c(0, reinterpret_cast<const unsigned char*>(header2), sizeof(ceph_msg_header2));
     epilogue->crc_values[1] = dpdk_msg->get_payload().crc32c();
@@ -635,8 +637,8 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
     dpdk_msg->compack_packet_set_header(frag);
     constexpr int max_frags = 31;
     Packet* pack = dpdk_msg->get_compacked_packet();
-    if(outgoing_packets.back()->nr_frags() + pack->nr_frags() < max_frags){
-      outgoing_packets.back()->append(pack);
+    if(connection->outgoing_packets.back()->nr_frags() + pack->nr_frags() < max_frags){
+      connection->outgoing_packets.back()->append(pack);
     }
     else{
       connection->outgoing_packets.push_back(pack);
@@ -1224,18 +1226,100 @@ CtPtr ProtocolV2::read_frame() {
   rx_preamble.clear();
   rx_epilogue.clear();
   rx_segments_data.clear();
-  rx_preable_epilogue_header_packet.reset();
-  rx_segment_packet.reset();
   if(dpdk_use){
-    if(connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,Tag::DPDK_MESSAGE)){
+    if(connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE)){
       // read as DPDKMessage
-      return 
+      // 需要确保读取的时候没有数据后切换，到rx_poll的流程?
+      // 直接将DPDKMessage加入到dpdk_message_to_decodes队列中
+      // 便于解耦decode工作和后面的派发工作
+      next_tag = Tag::DPDK_MESSAGE;
+      pre_msg = nullptr;
+      return read_dpdk();
     }
   }
   return READ(rx_frame_asm.get_preamble_onwire_len(),
               handle_read_frame_preamble_main);
 }
+CtPtr ProtocolV2::read_dpdk(){
+  DPDKMessage *dpdk_msg;
+  if(pre_msg == nullptr){
+    dpdk_msg = new DPDKMessage();
+  }
+  else{
+    ceph_abort();
+  }
+  constexpr ssize_t preabmble_epilogue_header_size = sizeof(ceph_msg_header2) + sizeof(preamble_block_t) + sizeof(epilogue_crc_rev0_block_t);
+  Packet preamble_epilogue_header_packet;
+  ssize_t ret = connection->read_until_dpdk(preamble_epilogue_header_packet, preabmble_epilogue_header_size);
+  if(ret < 0){
+    return nullptr;
+  }
+  if(preamble_epilogue_header_packet.nr_frags() !=1){
+    //to_do: need carefully deal with this case;
+    ceph_abort();
+  }
+  else{
+    void* base = preamble_epilogue_header_packet.frag(0).base;
+    preamble_block_t *preamble = reinterpret_cast<preamble_block_t*>(base);
+    epilogue_crc_rev0_block_t *epilogue = reinterpret_cast<epilogue_crc_rev0_block_t*>(base + sizeof(preamble_block_t));
+    ceph_msg_header2 *header2 = reinterpret_cast<ceph_msg_header2*>((void*)epilogue + sizeof(epilogue_crc_rev0_block_t));
+    ceph_msg_header &header = dpdk_msg->get_header();
+    ceph_msg_footer &footer = dpdk_msg->get_footer();
+    // 用header2给header赋值
+    header.seq = header2->seq;
+    header.tid = header2->tid;
+    header.type = header2->type;
+    header.priority = header2->priority;
+    header.version = header2->version;
+    header.front_len = ceph_le32(preamble->segments[1]);  // header2没有front_len字段，初始化为0
+    header.middle_len = ceph_le32(preamble->segments[2]); // header2没有middle_len字段，初始化为0
+    header.data_len = ceph_le32(preamble->segments[3]);   // header2没有data_len字段，初始化为0
+    header.data_off = header2->data_off;
+    // header.src 字段在header2中没有对应字段，保持原有值或根据需要设置
+    header.compat_version = header2->compat_version;
+    header.reserved = header2->reserved;
+    header.crc = ceph_le32(0);        // header2没有crc字段，初始化为0
 
+    // 用header2给footer赋值
+    footer.front_crc = ceph_le32(0);
+    footer.middle_crc = ceph_le32(0);
+    footer.data_crc = ceph_le32(0);
+    footer.sig = ceph_le64(0);
+    footer.flags = header2->flags;
+    if(heade.front_len !=0){
+      Packet payload;
+      ret=connection->read_until_dpdk(payload, header.front_len);
+      if(ret < 0){
+        ceph_abort();
+      }
+      dpdk_msg->set_payload(std::move(payload));
+    }
+    if(header.middle_len !=0){
+      Packet middle;
+      ret=connection->read_until_dpdk(middle, header.middle_len);
+      if(ret < 0){
+        ceph_abort();
+      }
+    }
+    if(header.data_len !=0){
+      Packet data;
+      ret=connection->read_until_dpdk(data, header.data_len);
+      if(ret < 0){
+        ceph_abort();
+      }
+      dpdk_msg->set_data(std::move(data));
+    }
+    bool ret = dpdk_message_to_decodes.push(dpdk_msg);
+    if(!ret){
+      temp_container.push_back(dpdk_msg);
+    }
+    dpdk_msg = nullptr;
+    if(dpdk_work_throught_encode){
+      return handle_dpdk_message();
+    }
+  }
+  return nullptr;
+}
 CtPtr ProtocolV2::handle_read_frame_preamble_main(rx_buffer_t &&buffer, int r) {
   ldout(cct, 20) << __func__ << " r=" << r << dendl;
 
@@ -1504,7 +1588,24 @@ CtPtr ProtocolV2::_handle_read_frame_epilogue_main() {
   }
   return handle_read_frame_dispatch();
 }
-
+CtPtr ProtocolV2::handle_dpdk_message(){
+  DPDKMessage *dpdk_msg;
+  bool ret = dpdk_message_to_decodes.pop(dpdk_msg);
+  if(!ret){
+    return nullptr;
+  }
+  dpdk_msg_wrapper->set_tid(dpdk_msg->get_header().tid);
+  if (connection->delay_state) {
+    double delay_period = 0;
+    connection->delay_state->queue(delay_period, dpdk_msg_wrapper);
+  } else if (messenger->ms_can_fast_dispatch(dpdk_msg_wrapper)) {
+    connection->dispatch_queue->fast_dispatch(dpdk_msg_wrapper);
+  } else {
+    connection->dispatch_queue->enqueue(dpdk_msg_wrapper, dpdk_msg_wrapper->get_priority(),
+                                        connection->conn_id);
+  }
+  return nullptr;
+}
 CtPtr ProtocolV2::handle_message() {
   ldout(cct, 20) << __func__ << dendl;
   ceph_assert(state == THROTTLE_DONE);

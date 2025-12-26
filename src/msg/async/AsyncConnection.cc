@@ -569,6 +569,13 @@ int AsyncConnection::send_dpdk_message(DPDKMessage *dpdk_msg)
   return protocol->send_dpdk_message(dpdk_msg);
 }
 
+bool AsyncConnection::get_a_frag(fragment& frag)
+{
+  return cs.get_a_frag(frag);
+}
+int fast_peek_dpdk_packet_tag(uint32_t tag_offset, char tag_type){
+  return cs.fast_peek_dpdk_packet_tag(tag_offset, tag_type);
+}
 int AsyncConnection::send_message(Message *m)
 {
   FUNCTRACE(async_msgr->cct);
