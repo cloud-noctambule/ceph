@@ -493,13 +493,14 @@ class DPDKQueuePair {
             _ring.pop_back();
             return pkt;
           }
+        }
+        else{
           bool ret = _ring_share.pop(pkt);
           if (!ret) {
             gc();
             return nullptr;
           }
         }
-
       }
       else{
         // Take completed from the HW first
@@ -533,7 +534,7 @@ class DPDKQueuePair {
           bool ret = _ring_share.push(buf);
           if (!ret) {
             //eighter put it back to some other queue;
-            // ceph_abort();
+            ceph_abort();
             _ring.push_back(buf);
           }
         }

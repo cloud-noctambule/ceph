@@ -39,6 +39,7 @@
 #include "const.h"
 #include "dpdk_rte.h"
 #include "DPDK.h"
+#include "msg/async/dpdk/Packet.h"
 #include "toeplitz.h"
 
 #include "common/Cycles.h"
@@ -859,8 +860,11 @@ inline std::optional<Packet> DPDKQueuePair::from_mbuf_lro(rte_mbuf* m)
 
 inline std::optional<Packet> DPDKQueuePair::from_mbuf(rte_mbuf* m)
 {
-  _rx_free_pkts.push_back(m);
-  _num_rx_free_segs += m->nb_segs;
+  if(!is_force_zero_copy_enabled){
+    _rx_free_pkts.push_back(m);
+    _num_rx_free_segs += m->nb_segs;
+  }
+
 
   if (!_dev->hw_features_ref().rx_lro || rte_pktmbuf_is_contiguous(m)) {
     if( is_force_zero_copy_enabled ) {
@@ -910,11 +914,21 @@ bool DPDKQueuePair::rx_gc(bool force)
   if(is_force_zero_copy_enabled ) {
     // in zero copy mode, we do not need to refill rx mbuf
     rte_mbuf* head;
+    while( !_rx_free_pkts.empty()){
+      bool ret =_lock_free_rx_pkts.push(_rx_free_pkts.back());
+      if(ret){
+        _rx_free_pkts.pop_back();
+      }
+      else{
+        ceph_abort("Failed to push rx mbuf to free pkts queue");
+      }
+    }
     while(_lock_free_rx_pkts.pop(head)){
       for(; head != nullptr; head = head->next) {
         _rx_free_bufs.push_back(head);
+        _num_rx_free_segs++;
       }
-      _num_rx_free_segs--;
+      // _num_rx_free_segs--;
     }
     for (auto&& m : _rx_free_bufs) {
       rte_pktmbuf_prefree_seg(m);
@@ -928,6 +942,12 @@ bool DPDKQueuePair::rx_gc(bool force)
       _num_rx_free_segs -= _rx_free_bufs.size();
       _rx_free_bufs.clear();
       // TODO: ceph_assert() in a fast path! Remove me ASAP!
+      if(!((_rx_free_pkts.empty() && !_num_rx_free_segs) ||
+             (!_rx_free_pkts.empty() && _num_rx_free_segs))){
+              ldout(cct,0 ) << __func__ << " rx_free_pkts size " << _rx_free_pkts.size()
+                            << " num_rx_free_segs " << _num_rx_free_segs
+                            << dendl;
+      }
       ceph_assert((_rx_free_pkts.empty() && !_num_rx_free_segs) ||
              (!_rx_free_pkts.empty() && _num_rx_free_segs));
     }
@@ -1217,10 +1237,13 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
 {
   // Too fragmented - linearize
   if (p.nr_frags() > max_frags) {
+    if(qp.is_force_zero_copy_enabled){
+      ceph_abort("packet frags > max_frags");
+    }
     p.linearize();
     qp.perf_logger->inc(l_dpdk_qp_tx_linearize_ops);
   }
-
+  ldout(cct, 0) << __func__ << " len " << p.len() << " frags " << p.nr_frags() << dendl;
  build_mbuf_cluster:
   rte_mbuf *head = nullptr, *last_seg = nullptr;
   unsigned nsegs = 0;
@@ -1230,30 +1253,76 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
   // copied and if yes - send it in a copy way
   //
   // 现在头部为网络栈的数据，基本都是要拷贝的。
-  if (!check_frag0(p)) {
-    if (!copy_one_frag(qp, p.frag(0), head, last_seg, nsegs)) {
+  if( qp.is_force_zero_copy_enabled){
+    if (!check_frag0(p)) {
+    tx_buf* buf = qp.get_tx_buf();
+    fragment& frag0 = p.frag(0);
+    if( !buf){
+      ldout(cct, 1) << __func__ << " no available tx buf" << dendl;
+      return nullptr;
+    }
+    // mbuf_put()
+    rte_mbuf* m = buf->rte_mbuf_p();
+    m->data_len = frag0.size;
+    m->pkt_len  = frag0.size;
+
+    qp.perf_logger->inc(l_dpdk_qp_tx_copy_ops);
+    qp.perf_logger->inc(l_dpdk_qp_tx_copy_bytes, frag0.size);
+    char* m_data = rte_pktmbuf_mtod(m, char*);
+    memcpy(m_data, frag0.base, frag0.size);
+    head = m;
+    last_seg = head;
+    nsegs = 1;
+    }
+    else{
+      ceph_abort("strange packet frag0 not need copy");
+    }
+  }
+  else{
+    if (!check_frag0(p)) {
+      if (!copy_one_frag(qp, p.frag(0), head, last_seg, nsegs)) {
+        ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(0).size << dendl;
+        return nullptr;
+      }
+    } else if (!translate_one_frag(qp, p.frag(0), head, last_seg, nsegs)) {
       ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(0).size << dendl;
       return nullptr;
     }
-  } else if (!translate_one_frag(qp, p.frag(0), head, last_seg, nsegs)) {
-    ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(0).size << dendl;
-    return nullptr;
   }
+
 
   unsigned total_nsegs = nsegs;
   //非头部数据，尝试不拷贝
   for (unsigned i = 1; i < p.nr_frags(); i++) {
     rte_mbuf *h = nullptr, *new_last_seg = nullptr;
-    if( p.frag(i).mbuf_ptr != nullptr){
+    if( qp.is_force_zero_copy_enabled){
+      if( p.frag(i).mbuf_ptr != nullptr){
       h = static_cast<rte_mbuf*>(p.frag(i).mbuf_ptr);
       new_last_seg = h;
+      nsegs = 1;
+      }
+      else{
+        if(p.nr_frags() == 2 && p.len() <= inline_mbuf_data_size){
+          rte_mbuf* m = head;
+          char* m_data = rte_pktmbuf_mtod(m, char*) + m->data_len;
+          memcpy(m_data, p.frag(i).base, p.frag(i).size);
+          m->data_len += p.frag(i).size;
+          nsegs = 0;
+          break;
+        }
+        else{
+          ceph_abort("strange packet frag " << i << " need copy");
+        }
+        
+      }
     }
-    else if (!translate_one_frag(qp, p.frag(i), h, new_last_seg, nsegs)) {
-      ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(i).size << dendl;
-      me(head)->recycle();
-      return nullptr;
+    else{
+      if (!translate_one_frag(qp, p.frag(i), h, new_last_seg, nsegs)) {
+        ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(i).size << dendl;
+        me(head)->recycle();
+        return nullptr;
+      }
     }
-
     total_nsegs += nsegs;
 
     // Attach a new buffers' chain to the packet chain
