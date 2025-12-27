@@ -34,8 +34,8 @@ using namespace std;
 
 #include <atomic>
 #define NUM_CLIENT_THREAD_MODELS 3
-static bool use_dpdk_zero_copy;
-static bool query_dpdk_recv_queue;
+static bool use_dpdk_zero_copy = false;
+static bool query_dpdk_recv_queue = false;
 const char* ClientThreadModaelNmes[] = {
     "ONE_THREAD_ONE_SERVER",//一个一个messenger，一个连接，一个服务器，一个线程
     "ONE_THREAD_ALL_SERVER",//一个messenger，多个连接，多个服务器，一个线程
@@ -173,7 +173,7 @@ class MessengerClient {
       }
     }
     void *entry() override {
-      while(true);
+      // while(true);
       if(!use_dpdk_zero_copy && !query_dpdk_recv_queue){
         entry_for_normal(ops);
       }
@@ -336,7 +336,7 @@ class MessengerClient {
     }
     std::cout<<"ready done!"<<std::endl;
     usleep(1000*1000);
-    while(1);
+    // while(1);
   }
   void start() {
     for (uint64_t i = 0; i < clients.size(); ++i)
@@ -448,6 +448,7 @@ int main(int argc, char **argv)
     g_ceph_context->_conf.set_val("ms_dpdk_host_ipv4_addr", "192.168.0.94",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
     g_ceph_context->_conf.set_val("debug_dpdk", "10/10", &cout_ss);
+    g_ceph_context->_conf.set_val("debug_ms", "10/10", &cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);

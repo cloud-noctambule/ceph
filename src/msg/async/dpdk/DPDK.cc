@@ -529,6 +529,9 @@ void DPDKQueuePair::build_sw_reta(const std::map<unsigned, float>& cpu_weights) 
 
 bool DPDKQueuePair::init_rx_mbuf_pool()
 {
+  if(is_force_zero_copy_enabled){
+    ldout(cct, 1) << __func__ << "' will be created with zero copy enabled" << dendl;
+  }
   std::string name = std::string(pktmbuf_pool_name) + std::to_string(_qid) + "_rx";
 
   // reserve the memory for Rx buffers containers
@@ -636,7 +639,10 @@ DPDKQueuePair::DPDKQueuePair(CephContext *c, EventCenter *cen, DPDKDevice* dev, 
 {
   is_force_zero_copy_enabled = cct->_conf.get_val<bool>("ms_dpdk_force_zero_copy");
   if(is_force_zero_copy_enabled){
-    ldout(cct, 0) << __func__ << " force zero copy is enabled" << dendl;
+    ldout(cct, 0) << __func__ << "is_force_zero_copy_enabled: force zero copy is enabled" << dendl;
+  }
+  else{
+    ldout(cct, 0) << __func__ << "is_force_zero_copy_enabled: force zero copy is not enabled" << dendl;
   }
   if (!init_rx_mbuf_pool()) {
     lderr(cct) << __func__ << " cannot initialize mbuf pools" << dendl;
@@ -861,14 +867,8 @@ inline std::optional<Packet> DPDKQueuePair::from_mbuf_lro(rte_mbuf* m)
 
 inline std::optional<Packet> DPDKQueuePair::from_mbuf(rte_mbuf* m)
 {
-  if(!is_force_zero_copy_enabled){
-    _rx_free_pkts.push_back(m);
-    _num_rx_free_segs += m->nb_segs;
-  }
-
-
-  if (!_dev->hw_features_ref().rx_lro || rte_pktmbuf_is_contiguous(m)) {
-    if( is_force_zero_copy_enabled ) {
+  if(is_force_zero_copy_enabled){
+    if (!_dev->hw_features_ref().rx_lro || rte_pktmbuf_is_contiguous(m)) {
       // in zero copy mode, we do not need to copy data buffer
       char* data = rte_pktmbuf_mtod(m, char*);
       size_t len = rte_pktmbuf_data_len(m);
@@ -879,16 +879,21 @@ inline std::optional<Packet> DPDKQueuePair::from_mbuf(rte_mbuf* m)
                       //to_do: make sure push success
                       ceph_assert(ret);
                     }));
+    } else {
+      ceph_assert(false); // do not support this case now;
+      return from_mbuf_lro(m);
     }
+  }
+  ceph_assert(!is_force_zero_copy_enabled);
+  _rx_free_pkts.push_back(m);
+  _num_rx_free_segs += m->nb_segs;
+
+  if (!_dev->hw_features_ref().rx_lro || rte_pktmbuf_is_contiguous(m)) {
     char* data = rte_pktmbuf_mtod(m, char*);
 
     return Packet(fragment{data, rte_pktmbuf_data_len(m)},
                   make_deleter([this, data] { _alloc_bufs.push_back(data); }));
   } else {
-    if( is_force_zero_copy_enabled ) {
-      ceph_assert(false); // do not support this case now;
-      return from_mbuf_lro(m);
-    }
     return from_mbuf_lro(m);
   }
 }
@@ -954,6 +959,7 @@ bool DPDKQueuePair::rx_gc(bool force)
     }
     return true;
   }
+  ceph_assert(!is_force_zero_copy_enabled);
   if (_num_rx_free_segs >= rx_gc_thresh || force) {
     ldout(cct, 10) << __func__ << " free segs " << _num_rx_free_segs
                    << " thresh " << rx_gc_thresh
@@ -1239,71 +1245,47 @@ void DPDKQueuePair::tx_buf::set_cluster_offload_info(const Packet& p, const DPDK
 DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
         CephContext *cct, Packet&& p, DPDKQueuePair& qp)
 {
-  // Too fragmented - linearize
-  if (p.nr_frags() > max_frags) {
-    if(qp.is_force_zero_copy_enabled){
+  ldout(cct, 0) << __func__ << " len " << p.len() << " frags " << p.nr_frags() << dendl;  //debug
+  if( qp.is_force_zero_copy_enabled){
+    // Too fragmented - linearize
+    if (p.nr_frags() > max_frags) {
       ceph_abort("packet frags > max_frags");
     }
-    p.linearize();
-    qp.perf_logger->inc(l_dpdk_qp_tx_linearize_ops);
-  }
-  ldout(cct, 0) << __func__ << " len " << p.len() << " frags " << p.nr_frags() << dendl;  //debug
- build_mbuf_cluster:
-  rte_mbuf *head = nullptr, *last_seg = nullptr;
-  unsigned nsegs = 0;
-
-  //
-  // Create a HEAD of the fragmented packet: check if frag0 has to be
-  // copied and if yes - send it in a copy way
-  //
-  // 现在头部为网络栈的数据，基本都是要拷贝的。
-  if( qp.is_force_zero_copy_enabled){
+    rte_mbuf *head = nullptr, *last_seg = nullptr;
+    unsigned nsegs = 0;
+    // 现在头部为网络栈的数据，基本都是要拷贝的。
     if (!check_frag0(p)) {
-    tx_buf* buf = qp.get_tx_buf();
-    fragment& frag0 = p.frag(0);
-    if( !buf){
-      ldout(cct, 1) << __func__ << " no available tx buf" << dendl;
-      return nullptr;
-    }
-    // mbuf_put()
-    rte_mbuf* m = buf->rte_mbuf_p();
-    m->data_len = frag0.size;
-    m->pkt_len  = frag0.size;
+      tx_buf* buf = qp.get_tx_buf();
+      fragment& frag0 = p.frag(0);
+      if( !buf){
+        ldout(cct, 1) << __func__ << " no available tx buf" << dendl;
+        return nullptr;
+      }
+      // mbuf_put()
+      rte_mbuf* m = buf->rte_mbuf_p();
+      m->data_len = frag0.size;
+      m->pkt_len  = frag0.size;
 
-    qp.perf_logger->inc(l_dpdk_qp_tx_copy_ops);
-    qp.perf_logger->inc(l_dpdk_qp_tx_copy_bytes, frag0.size);
-    char* m_data = rte_pktmbuf_mtod(m, char*);
-    memcpy(m_data, frag0.base, frag0.size);
-    head = m;
-    last_seg = head;
-    nsegs = 1;
+      qp.perf_logger->inc(l_dpdk_qp_tx_copy_ops);
+      qp.perf_logger->inc(l_dpdk_qp_tx_copy_bytes, frag0.size);
+      char* m_data = rte_pktmbuf_mtod(m, char*);
+      memcpy(m_data, frag0.base, frag0.size);
+      head = m;
+      last_seg = head;
+      nsegs = 1;
     }
     else{
       ceph_abort("strange packet frag0 not need copy");
     }
-  }
-  else{
-    if (!check_frag0(p)) {
-      if (!copy_one_frag(qp, p.frag(0), head, last_seg, nsegs)) {
-        ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(0).size << dendl;
-        return nullptr;
-      }
-    } else if (!translate_one_frag(qp, p.frag(0), head, last_seg, nsegs)) {
-      ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(0).size << dendl;
-      return nullptr;
-    }
-  }
-
-
-  unsigned total_nsegs = nsegs;
-  //非头部数据，尝试不拷贝
-  for (unsigned i = 1; i < p.nr_frags(); i++) {
-    rte_mbuf *h = nullptr, *new_last_seg = nullptr;
-    if( qp.is_force_zero_copy_enabled){
+  
+    unsigned total_nsegs = nsegs;
+    //非头部数据，尝试不拷贝
+    for (unsigned i = 1; i < p.nr_frags(); i++) {
+      rte_mbuf *h = nullptr, *new_last_seg = nullptr;
       if( p.frag(i).mbuf_ptr != nullptr){
-      h = static_cast<rte_mbuf*>(p.frag(i).mbuf_ptr);
-      new_last_seg = h;
-      nsegs = 1;
+        h = static_cast<rte_mbuf*>(p.frag(i).mbuf_ptr);
+        new_last_seg = h;
+        nsegs = 1;
       }
       else{
         if(p.len() <= inline_mbuf_data_size){
@@ -1311,38 +1293,75 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
           char* m_data = rte_pktmbuf_mtod(m, char*) + m->data_len;
           memcpy(m_data, p.frag(i).base, p.frag(i).size);
           m->data_len += p.frag(i).size;
-          nsegs = 0;
-          break;
+          continue;
         }
         else{
           ceph_abort("strange packet frag " << i << " need copy");
         }
-        
       }
+      total_nsegs += nsegs;
+      // Attach a new buffers' chain to the packet chain
+      last_seg->next = h;
+      last_seg = new_last_seg;
     }
-    else{
-      if (!translate_one_frag(qp, p.frag(i), h, new_last_seg, nsegs)) {
-        ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(i).size << dendl;
-        me(head)->recycle();
-        return nullptr;
-      }
+    // Update the HEAD buffer with the packet info
+    head->pkt_len = p.len();
+    head->nb_segs = total_nsegs;
+    // tx_pkt_burst loops until the next pointer is null, so last_seg->next must
+    // be null.
+    last_seg->next = nullptr;
+    set_cluster_offload_info(p, qp, head);
+    if (head->nb_segs > max_frags ||
+      (p.nr_frags() > 1 && qp.port().is_i40e_device() && i40e_should_linearize(head)) ||
+      (p.nr_frags() > vmxnet3_max_xmit_segment_frags && qp.port().is_vmxnet3_device())) {
+      ceph_assert(false);
+    }
+    me(last_seg)->set_packet(std::move(p));
+
+    return me(head);
+  }
+  ceph_assert(!qp.is_force_zero_copy_enabled);
+  // Too fragmented - linearize
+  if (p.nr_frags() > max_frags) {
+    p.linearize();
+    qp.perf_logger->inc(l_dpdk_qp_tx_linearize_ops);
+  }
+ build_mbuf_cluster:
+  rte_mbuf *head = nullptr, *last_seg = nullptr;
+  unsigned nsegs = 0;
+  //
+  // Create a HEAD of the fragmented packet: check if frag0 has to be
+  // copied and if yes - send it in a copy way
+  //
+  if (!check_frag0(p)) {
+    if (!copy_one_frag(qp, p.frag(0), head, last_seg, nsegs)) {
+      ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(0).size << dendl;
+      return nullptr;
+    }
+  } else if (!translate_one_frag(qp, p.frag(0), head, last_seg, nsegs)) {
+    ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(0).size << dendl;
+    return nullptr;
+  }
+  unsigned total_nsegs = nsegs;
+  for (unsigned i = 1; i < p.nr_frags(); i++) {
+    rte_mbuf *h = nullptr, *new_last_seg = nullptr;
+    if (!translate_one_frag(qp, p.frag(i), h, new_last_seg, nsegs)) {
+      ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(i).size << dendl;
+      me(head)->recycle();
+      return nullptr;
     }
     total_nsegs += nsegs;
-
     // Attach a new buffers' chain to the packet chain
     last_seg->next = h;
     last_seg = new_last_seg;
   }
-
   // Update the HEAD buffer with the packet info
   head->pkt_len = p.len();
   head->nb_segs = total_nsegs;
   // tx_pkt_burst loops until the next pointer is null, so last_seg->next must
   // be null.
   last_seg->next = nullptr;
-
   set_cluster_offload_info(p, qp, head);
-
   //
   // If a packet hasn't been linearized already and the resulting
   // cluster requires the linearisation due to HW limitation:
@@ -1354,20 +1373,12 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
   if (head->nb_segs > max_frags ||
       (p.nr_frags() > 1 && qp.port().is_i40e_device() && i40e_should_linearize(head)) ||
       (p.nr_frags() > vmxnet3_max_xmit_segment_frags && qp.port().is_vmxnet3_device())) {
-    if(qp.is_force_zero_copy_enabled ) {
-      // in zero copy mode, we do not support this case now
-      ceph_assert(false);
-      return nullptr;
-    }
     me(head)->recycle();
     p.linearize();
     qp.perf_logger->inc(l_dpdk_qp_tx_linearize_ops);
-
     goto build_mbuf_cluster;
   }
-
   me(last_seg)->set_packet(std::move(p));
-
   return me(head);
 }
 

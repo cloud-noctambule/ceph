@@ -554,8 +554,8 @@ class DPDKQueuePair {
     //如果这里提前清空回收，重传的数据就是错误的。
     //所以在零拷贝的情况下，不能过早的回收数据包
     bool gc() {
-      int cnt = 0;
-      if( is_force_zero_copy_enabled ){
+      if(is_force_zero_copy_enabled){
+        int cnt =0;
         for (auto it = _later_to_free.begin(); it != _later_to_free.end(); ) {
             auto next_it = ++it; // 先获取下一个迭代器（it 会先递增）
             --it; // 回到当前迭代器
@@ -566,21 +566,32 @@ class DPDKQueuePair {
             }
             it = next_it; // 用提前记录的下一个迭代器更新
         }
+        for (; cnt < gc_count; ++cnt) {
+          auto tx_buf_p = get_one_completed();
+          if (!tx_buf_p) {
+            return false;
+          }
+          if (tx_buf_p->check_del_ref_count()) {
+            put(tx_buf_p);
+          }
+          else{
+            _later_to_free.push_back(tx_buf_p);
+          }
+        }
+        return true;
       }
-      for (; cnt < gc_count; ++cnt) {
+      for (int cnt = 0; cnt < gc_count; ++cnt) {
         auto tx_buf_p = get_one_completed();
         if (!tx_buf_p) {
           return false;
         }
-        if (is_force_zero_copy_enabled && tx_buf_p->check_del_ref_count()) {
-          put(tx_buf_p);
-        }
-        else{
-          _later_to_free.push_back(tx_buf_p);
-        }
+      
+        put(tx_buf_p);
       }
-
+    
       return true;
+      int cnt = 0;
+
     }
    private:
     /**
