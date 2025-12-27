@@ -831,7 +831,7 @@ bool DPDKQueuePair::poll_tx() {
     } while (work && total_work < 256 && _tx_packetq.size() < 128);
   }
   if (!_tx_packetq.empty()) {
-    std::cout<<"func poll_tx :tx packets num: "<<_tx_packetq.size()<<std::endl;  //debug
+    //std::cout<<"func poll_tx :tx packets num: "<<_tx_packetq.size()<<std::endl;  //debug
     uint64_t c = send(_tx_packetq);
     perf_logger->inc(l_dpdk_qp_tx_packets, c);
     perf_logger->set(l_dpdk_qp_tx_last_bunch, c);
@@ -1048,8 +1048,7 @@ void DPDKQueuePair::process_packets(
     if (m->ol_flags & PKT_RX_RSS_HASH) {
       p->set_rss_hash(m->hash.rss);
     }
-    std::cout<<"func process_packets : will to l2 , packet len : "<<bytes<<" packet frags : "<< nr_frags
-    <<"p len "<<p->len()<<" p frags"<<p->nr_frags() << std::endl;  //debug
+    //std::cout<<"func process_packets : will to l2 , packet len : "<<bytes<<" packet frags : "<< nr_frags <<"p len "<<p->len()<<" p frags"<<p->nr_frags() << std::endl;  //debug
     _dev->l2receive(_qid, std::move(*p));
   }
 
@@ -1072,7 +1071,7 @@ bool DPDKQueuePair::poll_rx_once()
 
   /* Now process the NIC packets read */
   if (likely(count > 0)) {
-    std::cout<<"func poll_rx_once :rx packets num: "<<count<<std::endl;  //debug
+    //std::cout<<"func poll_rx_once :rx packets num: "<<count<<std::endl;  //debug
     process_packets(buf, count);
 #ifdef CEPH_PERF_DEV
     rx_cycles = Cycles::rdtsc() - start;
@@ -1482,6 +1481,7 @@ size_t DPDKQueuePair::tx_buf::copy_one_data_buf(
 {
   tx_buf* buf = qp.get_tx_buf();
   if (!buf) {
+    //std::cout<<"func copy_one_data_buf :no available tx buf"<<std::endl;  //debug
     return 0;
   }
 

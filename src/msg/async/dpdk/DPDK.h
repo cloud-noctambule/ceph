@@ -520,8 +520,6 @@ class DPDKQueuePair {
         pkt = _ring.back();
         _ring.pop_back();
       }
-
-
       return pkt;
     }
 
@@ -604,17 +602,24 @@ class DPDKQueuePair {
      *   all the buffers from the freed mbufs.
      */
     void init_factory() {
-      while (rte_mbuf* mbuf = rte_pktmbuf_alloc(_pool)) {
-        if(use_lock){
-          _ring.push_back(new(tx_buf::me(mbuf)) tx_buf{*this});
-        }
-        else{
-          bool ret = _ring_share.push(new(tx_buf::me(mbuf)) tx_buf{*this});
-          if (!ret) {
-            //eighter put it back to some other queue;
-            ceph_abort();
+      if(is_force_zero_copy_enabled){
+        while (rte_mbuf* mbuf = rte_pktmbuf_alloc(_pool)) {
+          if(use_lock){
             _ring.push_back(new(tx_buf::me(mbuf)) tx_buf{*this});
           }
+          else{
+            bool ret = _ring_share.push(new(tx_buf::me(mbuf)) tx_buf{*this});
+            if (!ret) {
+              //eighter put it back to some other queue;
+              ceph_abort();
+              _ring.push_back(new(tx_buf::me(mbuf)) tx_buf{*this});
+            }
+          }
+        }
+      }
+      else{
+        while (rte_mbuf* mbuf = rte_pktmbuf_alloc(_pool)) {
+          _ring.push_back(new(tx_buf::me(mbuf)) tx_buf{*this});
         }
       }
     }
@@ -660,7 +665,7 @@ class DPDKQueuePair {
 
   uint32_t send(circular_buffer<Packet>& pb) {
     // Zero-copy send
-    std::cout<<"func send :send packets num: "<<pb.size()<<std::endl;  //debug
+    //std::cout<<"func send :send packets num: "<<pb.size()<<std::endl;  //debug
     return _send(pb, [&] (Packet&& p) {
       return tx_buf::from_packet_zc(cct, std::move(p), *this);
     });
@@ -676,6 +681,7 @@ class DPDKQueuePair {
   template <class Func>
   uint32_t _send(circular_buffer<Packet>& pb, Func &&packet_to_tx_buf_p) {
     if (_tx_burst.size() == 0) {
+      
       for (auto&& p : pb) {
         // TODO: ceph_assert() in a fast path! Remove me ASAP!
         ceph_assert(p.len());
@@ -687,12 +693,13 @@ class DPDKQueuePair {
 
         _tx_burst.push_back(buf->rte_mbuf_p());
       }
+      //std::cout<<"func _send :_tx_burst get packets num: "<<_tx_burst.size()<<std::endl;  //debug
     }
 
     uint16_t sent = rte_eth_tx_burst(_dev_port_idx, _qid,
                                      _tx_burst.data() + _tx_burst_idx,
                                      _tx_burst.size() - _tx_burst_idx);
-
+    //std::cout<<"func _send :_tx_burst sent packets num: "<<sent<<std::endl;  //debug
     uint64_t nr_frags = 0, bytes = 0;
 
     for (int i = 0; i < sent; i++) {

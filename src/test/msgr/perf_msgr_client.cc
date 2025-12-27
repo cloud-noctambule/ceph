@@ -175,9 +175,11 @@ class MessengerClient {
     void *entry() override {
       // while(true);
       if(!use_dpdk_zero_copy && !query_dpdk_recv_queue){
+        std::cout<< "client"<<(cid>>48)<<" send normal message"<<std::endl;
         entry_for_normal(ops);
       }
       else{
+        std::cout<< "client"<<(cid>>48)<<" send dpdk message"<<std::endl;
         entry_for_dpdk_polling(ops);
       }
       uint64_t ori_cid = cid>>48;
@@ -448,7 +450,7 @@ int main(int argc, char **argv)
     g_ceph_context->_conf.set_val("ms_dpdk_host_ipv4_addr", "192.168.0.94",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
     g_ceph_context->_conf.set_val("debug_dpdk", "10/10", &cout_ss);
-    g_ceph_context->_conf.set_val("debug_ms", "10/10", &cout_ss);
+    g_ceph_context->_conf.set_val("debug_ms", "20/20", &cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);
