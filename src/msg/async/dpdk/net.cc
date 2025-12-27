@@ -157,6 +157,7 @@ int interface::dispatch_packet(EventCenter *center, Packet p) {
         ldout(cct, 1) << __func__ << " forward to " << fw << dendl;
         forward(center, fw, std::move(p));
       } else {
+        ldout(cct , 10)<< __func__ << " forward to l3 "<<dendl;
         auto h = eh->ntoh();
         auto from = h.src_mac;
         p.trim_front(sizeof(*eh));
@@ -164,6 +165,9 @@ int interface::dispatch_packet(EventCenter *center, Packet p) {
         // drop instead.
         if (l3.ready()) {
           return l3.packet_stream.produce(std::move(p), from);
+        }
+        else{
+          ldout(cct, 10) << __func__ << " l3 not ready, drop packet" << dendl;
         }
       }
     }

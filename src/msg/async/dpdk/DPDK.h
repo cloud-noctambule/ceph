@@ -649,6 +649,7 @@ class DPDKQueuePair {
 
   uint32_t send(circular_buffer<Packet>& pb) {
     // Zero-copy send
+    std::cout<<"func send :send packets num: "<<pb.size()<<std::endl;  //debug
     return _send(pb, [&] (Packet&& p) {
       return tx_buf::from_packet_zc(cct, std::move(p), *this);
     });

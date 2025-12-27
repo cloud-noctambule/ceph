@@ -109,6 +109,7 @@ ProtocolV2::ProtocolV2(AsyncConnection *connection)
       next_tag(static_cast<Tag>(0)),
       //TO_DO: need a parameter to initialize the queue
       dpdk_out_queue(4096),
+      dpdk_message_to_decodes(4096),
       keepalive(false) {
 }
 

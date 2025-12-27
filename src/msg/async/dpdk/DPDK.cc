@@ -825,6 +825,7 @@ bool DPDKQueuePair::poll_tx() {
     } while (work && total_work < 256 && _tx_packetq.size() < 128);
   }
   if (!_tx_packetq.empty()) {
+    std::cout<<"func poll_tx :tx packets num: "<<_tx_packetq.size()<<std::endl;  //debug
     uint64_t c = send(_tx_packetq);
     perf_logger->inc(l_dpdk_qp_tx_packets, c);
     perf_logger->set(l_dpdk_qp_tx_last_bunch, c);
@@ -1012,6 +1013,7 @@ void DPDKQueuePair::process_packets(
     // Drop the packet if translation above has failed
     if (!p) {
       perf_logger->inc(l_dpdk_qp_rx_no_memory_errors);
+      ldout(cct, 0) << __func__ << " could not trans to Packet" << dendl;  //debug
       continue;
     }
     // ldout(cct, 0) << __func__ << " len " << p->len() << " " << dendl;
@@ -1040,7 +1042,8 @@ void DPDKQueuePair::process_packets(
     if (m->ol_flags & PKT_RX_RSS_HASH) {
       p->set_rss_hash(m->hash.rss);
     }
-
+    std::cout<<"func process_packets : will to l2 , packet len : "<<bytes<<" packet frags : "<< nr_frags
+    <<"p len "<<p->len()<<" p frags"<<p->nr_frags() << std::endl;  //debug
     _dev->l2receive(_qid, std::move(*p));
   }
 
@@ -1063,6 +1066,7 @@ bool DPDKQueuePair::poll_rx_once()
 
   /* Now process the NIC packets read */
   if (likely(count > 0)) {
+    std::cout<<"func poll_rx_once :rx packets num: "<<count<<std::endl;  //debug
     process_packets(buf, count);
 #ifdef CEPH_PERF_DEV
     rx_cycles = Cycles::rdtsc() - start;
@@ -1243,7 +1247,7 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
     p.linearize();
     qp.perf_logger->inc(l_dpdk_qp_tx_linearize_ops);
   }
-  ldout(cct, 0) << __func__ << " len " << p.len() << " frags " << p.nr_frags() << dendl;
+  ldout(cct, 0) << __func__ << " len " << p.len() << " frags " << p.nr_frags() << dendl;  //debug
  build_mbuf_cluster:
   rte_mbuf *head = nullptr, *last_seg = nullptr;
   unsigned nsegs = 0;
@@ -1302,7 +1306,7 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
       nsegs = 1;
       }
       else{
-        if(p.nr_frags() == 2 && p.len() <= inline_mbuf_data_size){
+        if(p.len() <= inline_mbuf_data_size){
           rte_mbuf* m = head;
           char* m_data = rte_pktmbuf_mtod(m, char*) + m->data_len;
           memcpy(m_data, p.frag(i).base, p.frag(i).size);
