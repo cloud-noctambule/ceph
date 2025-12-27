@@ -1494,6 +1494,11 @@ options:
   level: advanced
   default: 1
   with_legacy: true
+- name: ms_dpdk_use_lock_for_rte_mbuf
+  type: bool
+  level: advanced
+  default: false
+  with_legacy: true
 - name: ms_dpdk_force_zero_copy
   type: bool
   level: advanced

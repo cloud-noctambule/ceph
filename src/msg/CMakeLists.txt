@@ -51,6 +51,7 @@ target_include_directories(common-msg-objs PRIVATE ${OPENSSL_INCLUDE_DIR})
 
 if(WITH_DPDK)
   set(async_dpdk_srcs
+    DPDKMessage.cc
     async/dpdk/ARP.cc
     async/dpdk/DPDK.cc
     async/dpdk/dpdk_rte.cc

@@ -37,6 +37,7 @@
 // abstract Connection, for keeping per-connection state
 
 class Messenger;
+class DPDKMessage;
 
 #ifdef UNIT_TESTS_BUILT
 class Interceptor;

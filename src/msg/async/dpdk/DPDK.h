@@ -627,7 +627,7 @@ class DPDKQueuePair {
     boost::lockfree::queue<tx_buf*> _ring_share;
     std::list<tx_buf*> _later_to_free;
     rte_mempool* _pool = nullptr;
-    static bool use_lock;
+    bool use_lock;
     const static int local_cache_size;
     static thread_local std::vector<rte_mbuf*> _local_cache;
 

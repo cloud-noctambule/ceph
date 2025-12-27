@@ -145,7 +145,7 @@ static constexpr const char* pktmbuf_pool_name   = "dpdk_net_pktmbuf_pool";
  */
 static constexpr uint8_t packet_read_size        = 32;
 /******************************************************************************/
-
+const int  DPDKQueuePair::tx_buf_factory::local_cache_size = 64;
 int DPDKDevice::init_port_start()
 {
   ceph_assert(_port_idx < rte_eth_dev_count_avail());
@@ -1066,6 +1066,7 @@ bool DPDKQueuePair::poll_rx_once()
 DPDKQueuePair::tx_buf_factory::tx_buf_factory(CephContext *c,
         DPDKDevice *dev, uint8_t qid): cct(c), _ring_share(mbufs_per_queue_tx)
 {
+  use_lock = cct->_conf.get_val<bool>("ms_dpdk_use_lock_for_rte_mbuf");
   is_force_zero_copy_enabled = cct->_conf.get_val<bool>("ms_dpdk_force_zero_copy");
   std::string name = std::string(pktmbuf_pool_name) + std::to_string(qid) + "_tx";
 

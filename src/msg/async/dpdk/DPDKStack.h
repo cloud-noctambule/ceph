@@ -27,7 +27,7 @@
 #include "IP.h"
 #include "Packet.h"
 #include "dpdk_rte.h"
-
+#include "DPDK.h"
 class interface;
 
 template <typename Protocol>
@@ -71,7 +71,7 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
   virtual void set_priority(int sd, int prio, int domain) {} //ConnectedSocketImpl新增了一个这个接口
   virtual bool get_a_frag(fragment& frag, int worker_id) override {
     auto& device = _conn.get_device();
-    return device.get_queue(uint16_t(worker_id)).get_a_frag(frag, worker_id);
+    return device.get_queue(uint16_t(worker_id)).get_a_frag(frag);
   }
   /**
    * @brief fast_peek_dpdk_packet_tag 从当前缓存中 peek 一个 dpdk 包的 tag
@@ -190,7 +190,7 @@ std::optional<Packet> tcp<InetTraits>::tcb::read()这个接口
   }
   // zero-copy send 接口
   // send的拷贝不发生在这附近，而是在最后的from_packet_zc函数中
-  ssize_t send(const Packet& p, bool more) {
+  ssize_t send(Packet *p, bool more) {
     auto err = _conn.get_errno();
     if (err < 0)
       return (ssize_t)err;
@@ -199,14 +199,15 @@ std::optional<Packet> tcp<InetTraits>::tcb::read()这个接口
     if (available == 0) {
       return 0;
     }
-    if( available < p.len() ) {
+    size_t send_len = p->len();
+    if( available < send_len ) {
       return -EAGAIN;
     }
-    _conn.send(p);
-    return p.len();
+    _conn.send(std::move(*p));
+    return send_len;
   }
   virtual ssize_t send_dpdk_packet(Packet *p) override {
-    return send(*p, false);
+    return send(p, false);
   }
 
   virtual ssize_t send(bufferlist &bl, bool more) override {

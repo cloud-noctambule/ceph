@@ -51,7 +51,7 @@ private:
   std::vector<snapid_t> snaps;
 
 public:
-  DPDKMOSDOp() : MOSDFastDispatchOp() {}
+  DPDKMOSDOp() : MOSDFastDispatchOp(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION) {}
   ~DPDKMOSDOp() final {}
 
   void decode_payload() override { 

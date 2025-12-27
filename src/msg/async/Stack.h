@@ -22,6 +22,7 @@
 #include "include/spinlock.h"
 #include "msg/async/Event.h"
 #include "msg/msg_types.h"
+#include <cmath>
 #include <string>
 #include "msg/async/dpdk/Packet.h"
 class Worker;
@@ -30,15 +31,27 @@ class ConnectedSocketImpl {
   virtual ~ConnectedSocketImpl() {}
   virtual int is_connected() = 0;
   virtual ssize_t read(char*, size_t) = 0;
-  virtual ssize_t read(Packet& ret, size_t len) = 0;
+  virtual ssize_t read(Packet& ret, size_t len) {
+    ceph_abort();
+    return -EINVAL;
+  };
   virtual ssize_t send(ceph::buffer::list &bl, bool more) = 0;
-  virtual ssize_t send_dpdk_packet(Packet *p) = 0;
+  virtual ssize_t send_dpdk_packet(Packet *p)  {
+    ceph_abort();
+    return -EINVAL;
+  };
   virtual void shutdown() = 0;
   virtual void close() = 0;
   virtual int fd() const = 0;
   virtual void set_priority(int sd, int prio, int domain) = 0;
-  virtual bool get_a_frag(fragment& frag, int worker_id) = 0;
-  virtual int fast_peek_dpdk_packet_tag(uint32_t tag_offset, char tag_type) {return false;};
+  virtual bool get_a_frag(fragment& frag, int worker_id) {
+    ceph_abort();
+    return false;
+  };
+  virtual int fast_peek_dpdk_packet_tag(uint32_t tag_offset, char tag_type)  {
+    ceph_abort();
+    return -EINVAL;
+  };
 };
 
 class ConnectedSocket;
@@ -102,7 +115,7 @@ class ConnectedSocket {
     return _csi->read(buf, len);
   }
   //for DPDK use, We get through the zero-copy read interface
-  virtual ssize_t read(Packet& ret, size_t len) {
+  ssize_t read(Packet& ret, size_t len) {
     return _csi->read(ret, len);
   };
   /// Gets the output stream.
@@ -114,6 +127,10 @@ class ConnectedSocket {
   /// Send a DPDK packet.
   ssize_t send_dpdk_packet(Packet *p) {
     return _csi->send_dpdk_packet(p);
+  }
+  /// Fast peek a DPDK packet tag.
+  int fast_peek_dpdk_packet_tag(uint32_t tag_offset, char tag_type) {
+    return _csi->fast_peek_dpdk_packet_tag(tag_offset, tag_type);
   }
   /// Disables output to the socket.
   ///

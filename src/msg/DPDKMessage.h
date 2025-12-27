@@ -265,7 +265,7 @@ public:
   bool has_data() const { return data.has_value(); }
   bool has_payload() const { return payload.has_value(); }
   bool has_middle() const { return middle.has_value(); }
-  void set_data(const Packet& pkt) {
+  void set_data(Packet pkt) {
     if (byte_throttler)
       byte_throttler->put(data.value().len());
     data = std::move(pkt);
@@ -299,7 +299,7 @@ public:
   void calc_data_crc();
 
   virtual int get_cost() const {
-    return data.len();
+    return data.value().len();
   }
 
   // type

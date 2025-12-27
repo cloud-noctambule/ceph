@@ -338,7 +338,7 @@ ssize_t AsyncConnection::_try_send_dpdk(){
     return 0;
   }
   cs.send_dpdk_packet(outgoing_packets.front());
-  outgoing_packets.pop();
+  outgoing_packets.pop_front();
   return 0;
 }
 // return the remaining bytes, it may larger than the length of ptr
@@ -573,7 +573,7 @@ bool AsyncConnection::get_a_frag(fragment& frag)
 {
   return cs.get_a_frag(frag);
 }
-int fast_peek_dpdk_packet_tag(uint32_t tag_offset, char tag_type){
+int AsyncConnection::fast_peek_dpdk_packet_tag(uint32_t tag_offset, char tag_type){
   return cs.fast_peek_dpdk_packet_tag(tag_offset, tag_type);
 }
 int AsyncConnection::send_message(Message *m)

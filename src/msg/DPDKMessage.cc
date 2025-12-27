@@ -35,12 +35,12 @@ static uint32_t packet_crc32c(uint32_t crc, const Packet& pkt) {
 class DPDKMOSDOpReply;
 
 void DPDKMessage::calc_front_crc() {
-  footer.front_crc = packet_crc32c(0, payload);
-  footer.middle_crc = packet_crc32c(0, middle);
+  // footer.front_crc = packet_crc32c(0, payload);
+  // footer.middle_crc = packet_crc32c(0, middle);
 }
 
 void DPDKMessage::calc_data_crc() {
-  footer.data_crc = packet_crc32c(0, data);
+  // footer.data_crc = packet_crc32c(0, data);
 }
 
 void DPDKMessage::encode_trace(Packet& pkt, uint64_t features) const {
@@ -90,11 +90,11 @@ void DPDKMessage::decode_trace(Packet& pkt, bool create) {
 void DPDKMessage::encode(uint64_t features, int crcflags, bool skip_header_crc) {
   // encode and copy out of *m
   if (empty_payload()) {
-    ceph_assert(middle.len() == 0);
+    ceph_assert(middle->len() == 0);
     encode_payload(features);
 
     if (byte_throttler) {
-      byte_throttler->take(payload.len() + middle.len());
+      byte_throttler->take(payload->len() + middle->len());
     }
 
     // if the encoder didn't specify past compatibility, we assume it
@@ -106,9 +106,9 @@ void DPDKMessage::encode(uint64_t features, int crcflags, bool skip_header_crc) 
     calc_front_crc();
 
   // update envelope
-  header.front_len = get_payload().len();
-  header.middle_len = get_middle().len();
-  header.data_len = get_data().len();
+  header.front_len = payload->len();
+  header.middle_len = middle->len();
+  header.data_len = data->len();
   if (!skip_header_crc && (crcflags & MSG_CRC_HEADER))
     calc_header_crc();
 
@@ -215,10 +215,10 @@ DPDKMessage *decode_dpdk_message(CephContext *cct,
   m->set_footer(footer);
   m->set_connection(conn);
   
-  // Set the payload, middle, and data
-  m->set_payload(std::move(front));
-  m->set_middle(std::move(middle));
-  m->set_data(data); // Note: not using move here as data might be used elsewhere
+  // // Set the payload, middle, and data
+  // m->set_payload(std::move(front));
+  // m->set_middle(std::move(middle));
+  // m->set_data(data); // Note: not using move here as data might be used elsewhere
   
   // Decode the payload
   m->decode_payload();

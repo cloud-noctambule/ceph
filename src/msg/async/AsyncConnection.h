@@ -36,6 +36,7 @@
 
 #include "Event.h"
 #include "Stack.h"
+#include "msg/async/dpdk/Packet.h"
 
 class AsyncMessenger;
 class DispatchQueue;
@@ -61,6 +62,7 @@ class AsyncConnection : public Connection {
   ssize_t write(ceph::buffer::list &bl, std::function<void(ssize_t)> callback,
                 bool more=false);
   ssize_t _try_send(bool more=false);
+  ssize_t _try_send_dpdk();
 
   void _connect();
   void _stop();
@@ -189,7 +191,7 @@ private:
 
   // lockfree, only used in own thread
   ceph::buffer::list outgoing_bl;
-  std::queue<packet*> outgoing_packets;
+  std::list<Packet*> outgoing_packets;
   bool open_write = false;
 
   std::mutex write_lock;

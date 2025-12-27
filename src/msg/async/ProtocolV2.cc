@@ -436,8 +436,8 @@ void ProtocolV2::prepare_send_dpdk_message(uint64_t features,
 					   DPDKMessage *dpdk_msg) {
   ldout(cct, 20) << __func__ << " dpdk_msg=" << *dpdk_msg << dendl;
 
-  // encode and copy out of *dpdk_msg
-  dpdk_msg->encode(features, 0);
+  // to_do: encode 
+  // dpdk_msg->encode(features, 0);
 }
 int ProtocolV2::send_dpdk_message(DPDKMessage *dpdk_msg) {
   uint64_t f = connection->get_features_fast();
@@ -589,24 +589,29 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
     //在这种情况下，我们直接获取一个rte_mbuf来装填Message的头
     fragment frag;
     bool ret = connection->get_a_frag(frag);//TO_DO
+    if(!frag.mbuf_ptr){
+      ldout(cct, 1) << __func__ << " error alloc mbuf" << dendl;
+      return -ENOMEM;
+    }    
     int frag_size = frag.size;
     if( !ret ||frag_size < preabmble_epilogue_header_size){
       ldout(cct, 0) << __func__ << " error frag_size < preabmble_epilogue_header_size" << dendl;
       ceph_abort();
       return -EINVAL;
     }
-    if(!mbuf){
-      ldout(cct, 1) << __func__ << " error alloc mbuf" << dendl;
-      return -ENOMEM;
-    }
+
     preamble_block_t *preamble = reinterpret_cast<preamble_block_t*>(frag.base);
     // 填充preamble
     preamble->tag = static_cast<__u8>(Tag::DPDK_MESSAGE);
     preamble->num_segments = 4;
-    preamble->segments[0] = sizeof(ceph_msg_header2);
-    preamble->segments[1] = dpdk_msg->get_payload().len();
-    preamble->segments[2] = dpdk_msg->get_middle().len();
-    preamble->segments[3] = dpdk_msg->get_data().len();
+    preamble->segments[0].length = ceph_le32(sizeof(ceph_msg_header2));
+    preamble->segments[0].alignment = ceph_le16(segment_t::DEFAULT_ALIGNMENT);
+    preamble->segments[1].length = ceph_le32(dpdk_msg->get_payload().len());
+    preamble->segments[1].alignment = ceph_le16(segment_t::DEFAULT_ALIGNMENT);
+    preamble->segments[2].length = ceph_le32(dpdk_msg->get_middle().len());
+    preamble->segments[2].alignment = ceph_le16(segment_t::DEFAULT_ALIGNMENT);
+    preamble->segments[3].length = ceph_le32(dpdk_msg->get_data().len());
+    preamble->segments[3].alignment = ceph_le16(segment_t::DEFAULT_ALIGNMENT);
     preamble->flags = 0;
     preamble-> crc = ceph_crc32c(
       0, reinterpret_cast<const unsigned char*>(preamble),
@@ -638,7 +643,7 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
     constexpr int max_frags = 31;
     Packet* pack = dpdk_msg->get_compacked_packet();
     if(connection->outgoing_packets.back()->nr_frags() + pack->nr_frags() < max_frags){
-      connection->outgoing_packets.back()->append(pack);
+      connection->outgoing_packets.back()->append(std::move(*pack));
     }
     else{
       connection->outgoing_packets.push_back(pack);
@@ -1271,9 +1276,9 @@ CtPtr ProtocolV2::read_dpdk(){
     header.type = header2->type;
     header.priority = header2->priority;
     header.version = header2->version;
-    header.front_len = ceph_le32(preamble->segments[1]);  // header2没有front_len字段，初始化为0
-    header.middle_len = ceph_le32(preamble->segments[2]); // header2没有middle_len字段，初始化为0
-    header.data_len = ceph_le32(preamble->segments[3]);   // header2没有data_len字段，初始化为0
+    header.front_len = ceph_le32(preamble->segments[1].length);  // header2没有front_len字段，初始化为0
+    header.middle_len = ceph_le32(preamble->segments[2].length); // header2没有middle_len字段，初始化为0
+    header.data_len = ceph_le32(preamble->segments[3].length);   // header2没有data_len字段，初始化为0
     header.data_off = header2->data_off;
     // header.src 字段在header2中没有对应字段，保持原有值或根据需要设置
     header.compat_version = header2->compat_version;
@@ -1286,7 +1291,7 @@ CtPtr ProtocolV2::read_dpdk(){
     footer.data_crc = ceph_le32(0);
     footer.sig = ceph_le64(0);
     footer.flags = header2->flags;
-    if(heade.front_len !=0){
+    if(header.front_len !=0){
       Packet payload;
       ret=connection->read_until_dpdk(payload, header.front_len);
       if(ret < 0){

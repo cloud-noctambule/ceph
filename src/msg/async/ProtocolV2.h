@@ -15,6 +15,8 @@
 #include <boost/lockfree/queue.hpp>
 #include <sys/types.h>
 class ProtocolV2 : public Protocol {
+public:
+  using CtPtr = Ct<ProtocolV2>*;
 private:
   enum State {
     NONE,
@@ -78,6 +80,11 @@ private:
   // TODO: move into auth_meta?
   ceph::crypto::onwire::rxtx_t session_stream_handlers;
   ceph::compression::onwire::rxtx_t session_compression_handlers;
+  
+  // DPDK related methods
+  void write_for_dpdk();
+  CtPtr read_dpdk();
+  CtPtr handle_dpdk_message();
   
 private:
   entity_name_t peer_name;

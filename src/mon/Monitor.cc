@@ -4135,6 +4135,16 @@ struct AnonConnection : public Connection {
     return socket_addr;
   }
 
+  int send_dpdk_message(DPDKMessage *dpdk_msg) override {
+    ceph_assert("send_dpdk_message on anonymous connection");
+    return -ENOTSUP;
+  }
+
+  bool get_a_frag(fragment& frag) override {
+    ceph_assert("get_a_frag on anonymous connection");
+    return false;
+  }
+
 private:
   FRIEND_MAKE_REF(AnonConnection);
   explicit AnonConnection(CephContext *cct, const entity_addr_t& sa)

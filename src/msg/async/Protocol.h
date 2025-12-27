@@ -126,7 +126,7 @@ public:
   // send message
   virtual void send_message(Message *m) = 0;
   // send dpdk message
-  virtual int send_dpdk_message(DPDKMessage *dpdk_msg) {};
+  virtual int send_dpdk_message(DPDKMessage *dpdk_msg) { return 0; };
 
   // send keepalive
   virtual void send_keepalive() = 0;

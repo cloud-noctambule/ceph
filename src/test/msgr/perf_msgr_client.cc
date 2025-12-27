@@ -117,7 +117,7 @@ class MessengerClient {
       bufferptr ptr(msg_len);
       memset(ptr.c_str(), 0, msg_len);
       data.append(ptr);
-      pure_data = malloc(msg_len);
+      pure_data = static_cast<char*>(malloc(msg_len));
       memset(pure_data, 0, msg_len);
       this->cid=cid;
       this->cid<<=48;
@@ -161,11 +161,11 @@ class MessengerClient {
         while(to_send_data_off <= msg_len){
           vecs.emplace_back();
           bool ret =(*conns)[sid_index]->get_a_frag(vecs.back());
-          int to_copy = min(msg_len - to_send_data_off,vecs.back().len);
-          memcopy(vecs.back().data,pure_data+to_send_data_off,to_copy);
+          int to_copy = min(msg_len - to_send_data_off, static_cast<int>(vecs.back().size));
+          memcpy(vecs.back().base,pure_data+to_send_data_off,to_copy);
           to_send_data_off +=to_copy;
         }
-        dpdk_msg->set_data(std::move(Packet(vecs)));
+        dpdk_msg->set_data(std::move(Packet(vecs, deleter())));
         (*conns)[sid_index]->send_dpdk_message(dpdk_msg);
         inflight++;
         record[(*sid)[sid_index]][record_start_pos[sid_index]++]=Cycles::rdtsc();//可能有点误差
@@ -472,7 +472,7 @@ int main(int argc, char **argv)
   cout << "       ios " << ios << std::endl;
   cout << "       thinktime(us) " << think_time << std::endl;
   cout << "       message data bytes " << len << std::endl;
-  cout << "       client thread mode "<<ClientThreadModelNames[mode]<<std::endl;
+  cout << "       client thread mode "<<ClientThreadModaelNmes[mode]<<std::endl;
   
   MessengerClient client(public_msgr_type, args[0], think_time);
 

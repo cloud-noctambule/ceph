@@ -241,7 +241,7 @@ public:
   uint32_t crc32c(uint32_t crc = 0) const {
     return 0;  
   }
-  bool get_del_ref_count() const{
+  int get_del_ref_count() const{
     if(_impl) {
       return _impl->_deleter.get_ref_count();
     }
