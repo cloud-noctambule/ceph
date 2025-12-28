@@ -437,6 +437,16 @@ int main(int argc, char **argv)
     cout<<cout_ss.str()<<std::endl;
   }
   if(args.size()>7&&(args[7][0] == 'd' || args[7][0] == 'D')){
+    bool force_zero_copy_in_stack = false;
+    if(args.size()>8&&(args[8][0] == 'z' || args[8][0] == 'Z')){
+      std::cout<<"force_zero_copy_in_stack"<<std::endl;
+      force_zero_copy_in_stack = true;
+    }
+    if(args.size()>9&&(args[9][0] == 'D' || args[9][0] == 'd')){
+      std::cout<<"send_dpdk_message"<<std::endl;
+      use_dpdk_zero_copy = true;
+      query_dpdk_recv_queue = true;
+    }
     std::stringstream cout_ss; // 创建一个stringstream对象
     g_ceph_context->_conf.set_val("ms_type", "async+dpdk",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_memory_channel", "2",&cout_ss);
@@ -448,7 +458,12 @@ int main(int argc, char **argv)
     g_ceph_context->_conf.set_val("ms_dpdk_gateway_ipv4_addr", "192.168.0.53",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_netmask_ipv4_addr", "255.255.255.0",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_host_ipv4_addr", "192.168.0.94",&cout_ss);
-    g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
+    if(force_zero_copy_in_stack){
+      g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "true",&cout_ss);
+    }
+    else{
+      g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
+    }
     // g_ceph_context->_conf.set_val("debug_dpdk", "10/10", &cout_ss);
     // g_ceph_context->_conf.set_val("debug_ms", "20/20", &cout_ss);
     cout<<cout_ss.str()<<std::endl;

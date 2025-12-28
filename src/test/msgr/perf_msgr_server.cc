@@ -155,6 +155,10 @@ int main(int argc, char **argv)
     cout<<cout_ss.str()<<std::endl;
   }
   if(args.size()>3&&(args[3][0] == 'd' || args[3][0] == 'D')){
+    bool force_zero_copy_in_stack = false;
+    if(args.size()>4&&(args[4][0] == 'z' || args[4][0] == 'Z')){
+      force_zero_copy_in_stack = true;
+    }
     std::stringstream cout_ss; // 创建一个stringstream对象
     
     g_ceph_context->_conf.set_val("ms_type", "async+dpdk",&cout_ss);
