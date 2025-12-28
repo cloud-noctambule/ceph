@@ -449,8 +449,8 @@ int main(int argc, char **argv)
     g_ceph_context->_conf.set_val("ms_dpdk_netmask_ipv4_addr", "255.255.255.0",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_host_ipv4_addr", "192.168.0.94",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
-    g_ceph_context->_conf.set_val("debug_dpdk", "10/10", &cout_ss);
-    g_ceph_context->_conf.set_val("debug_ms", "20/20", &cout_ss);
+    // g_ceph_context->_conf.set_val("debug_dpdk", "10/10", &cout_ss);
+    // g_ceph_context->_conf.set_val("debug_ms", "20/20", &cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);
@@ -490,5 +490,7 @@ int main(int argc, char **argv)
   cout << " Total op " << (ios * numjobs) << " run time " << Cycles::to_microseconds(stop - start) << "us." << std::endl;
   client.gather_record();
   client.print_record();
+  std::cout<<"done! wait ctrl+c to exit"<<std::endl;
+  exit(0);
   return 0;
 }
