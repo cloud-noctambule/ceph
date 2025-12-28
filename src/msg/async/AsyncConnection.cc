@@ -146,6 +146,9 @@ AsyncConnection::AsyncConnection(CephContext *cct, AsyncMessenger *m, DispatchQu
   } else {
     protocol = std::unique_ptr<Protocol>(new ProtocolV1(this));
   }
+  if(cct->_conf->ms_dpdk_with_dpdk_message){
+    recv_max_prefetch = 0;
+  }
   logger->inc(l_msgr_created_connections);
 }
 

@@ -123,6 +123,7 @@ ProtocolV2::ProtocolV2(AsyncConnection *connection)
 		         pgid.pool(), oloc.nspace);
           spg_t spgid(pgid);
         dpdk_msg_wrapper = new MOSDOp(0, 0, hobj, spgid, 0, 0, 0);
+        dpdk_tag_offset = offsetof(preamble_block_t, tag);
 }
 
 ProtocolV2::~ProtocolV2() {
@@ -1243,7 +1244,7 @@ CtPtr ProtocolV2::read_frame() {
   }
 
   ldout(cct, 20) << __func__ << dendl;
-  if(dpdk_use){
+  if(dpdk_use && state >= SESSION_ACCEPTING){
     if(connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE)){
       // read as DPDKMessage
       // 需要确保读取的时候没有数据后切换，到rx_poll的流程?

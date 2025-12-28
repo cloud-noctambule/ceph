@@ -83,10 +83,10 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
   virtual int fast_peek_dpdk_packet_tag(uint32_t tag_offset, char tag_type) override {
     if (!_buf) {
       _buf = std::move(_conn.read());
-      //make sure internal data only
-      ceph_assert(_buf->using_internal_data() == false); 
       if (!_buf)
         return -EAGAIN;
+      //make sure internal data only
+      ceph_assert(_buf->using_internal_data() == false); 
       _cur_off = 0;
     }
     if(_cur_off + tag_offset >= _buf->len()){
@@ -138,9 +138,9 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
     if (!_buf) {
       _buf = std::move(_conn.read());
       //make sure internal data only
-      ceph_assert(_buf->using_internal_data() == false); 
       if (!_buf)
         return -EAGAIN;
+      ceph_assert(_buf->using_internal_data() == false); 
       _cur_off = 0;
     }
     uint32_t read_len = _buf->len()-_cur_off;
