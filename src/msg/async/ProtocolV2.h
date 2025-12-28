@@ -14,7 +14,12 @@
 #include "msg/async/dpdk/Packet.h"
 #include <boost/lockfree/queue.hpp>
 #include <sys/types.h>
+
+class EventCenter;
+class DPDKWritePoller;
+
 class ProtocolV2 : public Protocol {
+  friend class DPDKWritePoller;
 public:
   using CtPtr = Ct<ProtocolV2>*;
 private:
@@ -85,6 +90,8 @@ private:
   void write_for_dpdk();
   CtPtr read_dpdk();
   CtPtr handle_dpdk_message();
+public:
+  void init_dpdk_poller();
   
 private:
   entity_name_t peer_name;
@@ -112,6 +119,9 @@ private:
   std::atomic<uint64_t> out_seq{0};
   std::atomic<uint64_t> in_seq{0};
   std::atomic<uint64_t> ack_left{0};
+  
+  // DPDK write poller
+  std::unique_ptr<DPDKWritePoller> dpdk_write_poller;
 
   using ProtFuncPtr = void (ProtocolV2::*)();
   Ct<ProtocolV2> *bannerExchangeCallback;

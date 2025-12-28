@@ -88,7 +88,15 @@ if(connection->interceptor) { \
 #else
 #define INTERCEPT(S)
 #endif
+class C_handle_poller : public EventCallback {
+  ProtocolV2* protocol;
 
+ public:
+  explicit C_handle_poller(ProtocolV2* c): protocol(c) {}
+  void do_request(uint64_t fd_or_id) override {
+    protocol->init_dpdk_poller();
+  }
+};
 ProtocolV2::ProtocolV2(AsyncConnection *connection)
     : Protocol(2, connection),
       state(NONE),
@@ -124,6 +132,10 @@ ProtocolV2::ProtocolV2(AsyncConnection *connection)
           spg_t spgid(pgid);
         dpdk_msg_wrapper = new MOSDOp(0, 0, hobj, spgid, 0, 0, 0);
         dpdk_tag_offset = offsetof(preamble_block_t, tag);
+        // Initialize DPDK write poller if DPDK is enabled
+        EventCallbackRef poller_handler = new C_handle_poller(this);
+        connection->center->dispatch_event_external(poller_handler);
+        
 }
 
 ProtocolV2::~ProtocolV2() {
@@ -796,6 +808,35 @@ void ProtocolV2::write_for_dpdk(){
         write_dpdk_message(dpdk_msg);
       }
     }while(ret == true);
+  }
+}
+
+// DPDK Write Poller to encapsulate write_for_dpdk
+class DPDKWritePoller : public EventCenter::Poller {
+private:
+  ProtocolV2* protocol;
+
+public:
+  explicit DPDKWritePoller(EventCenter* center, ProtocolV2* proto)
+    : Poller(center, "DPDKWritePoller"), protocol(proto) {}
+
+  ~DPDKWritePoller() override = default;
+
+  int poll() override {
+    protocol->write_for_dpdk();
+    // Return 1 to indicate we did work
+    return 1;
+  }
+};
+
+void ProtocolV2::init_dpdk_poller() {
+  if (dpdk_use && !dpdk_write_poller) {
+    // Get EventCenter from connection
+    EventCenter* center = connection->center;
+    // Create DPDKWritePoller instance
+    center->dispatch_event_external(connection->write_handler);
+    dpdk_write_poller = std::make_unique<DPDKWritePoller>(center, this);
+    ldout(cct, 10) << __func__ << " DPDK write poller initialized" << dendl;
   }
 }
 void ProtocolV2::write_event() {

@@ -80,9 +80,13 @@ class C_handle_notify : public EventCallback {
 EventCenter::Poller::Poller(EventCenter* center, const std::string& name)
     : owner(center), poller_name(name), slot(owner->pollers.size())
 {
+  owner->print_poller_name(poller_name);
   owner->pollers.push_back(this);
 }
-
+void EventCenter::print_poller_name(const std::string& poller_name)
+{
+  ldout(cct, 0) << __func__ << " poller add: " << poller_name << dendl;
+}
 /**
  * Destroy a Poller.
  */

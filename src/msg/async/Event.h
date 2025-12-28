@@ -119,6 +119,7 @@ class EventCenter {
   };
 
  public:
+  void print_poller_name(const std::string& poller_name);
   /**
      * A Poller object is invoked once each time through the dispatcher's
      * inner polling loop.
@@ -154,7 +155,6 @@ class EventCenter {
     /// after EventCenter::reset).
     int slot;
   };
-
  private:
   CephContext *cct;
   std::string type;
