@@ -57,7 +57,7 @@ void* as_cookie(struct rte_pktmbuf_pool_private& p) {
 };
 
 /******************* Net device related constatns *****************************/
-static constexpr uint16_t default_ring_size      = 512;
+static constexpr uint16_t default_ring_size      = 4096;
 
 //
 // We need 2 times the ring size of buffers because of the way PMDs
