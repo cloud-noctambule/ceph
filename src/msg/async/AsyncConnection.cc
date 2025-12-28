@@ -337,11 +337,10 @@ ssize_t AsyncConnection::write(ceph::buffer::list &bl,
 }
 
 ssize_t AsyncConnection::_try_send_dpdk(){
-  if (outgoing_packets.empty()) {
-    return 0;
+  while (!outgoing_packets.empty()) {
+    cs.send_dpdk_packet(outgoing_packets.front());
+    outgoing_packets.pop_front();
   }
-  cs.send_dpdk_packet(outgoing_packets.front());
-  outgoing_packets.pop_front();
   return 0;
 }
 // return the remaining bytes, it may larger than the length of ptr

@@ -14,6 +14,7 @@
 #include "include/random.h"
 #include "auth/AuthClient.h"
 #include "auth/AuthServer.h"
+#include "msg/Connection.h"
 #include "msg/DPDKMessage.h"
 #include "messages/MOSDOp.h"
 #include "msg/async/Protocol.h"
@@ -799,16 +800,15 @@ void ProtocolV2::reset_compression() {
   session_compression_handlers.tx.reset(nullptr);
 }
 void ProtocolV2::write_for_dpdk(){
-  if(can_write){
-    bool ret = false;
-    DPDKMessage* dpdk_msg; 
-    do{
-      ret = dpdk_out_queue.pop(dpdk_msg);
-      if(ret){
-        write_dpdk_message(dpdk_msg);
-      }
-    }while(ret == true);
-  }
+  bool ret = false;
+  DPDKMessage* dpdk_msg; 
+  do{
+    ret = dpdk_out_queue.pop(dpdk_msg);
+    if(ret){
+      write_dpdk_message(dpdk_msg);
+    }
+  }while(ret == true);
+  connection->_try_send_dpdk();
 }
 
 // DPDK Write Poller to encapsulate write_for_dpdk
@@ -836,7 +836,7 @@ void ProtocolV2::init_dpdk_poller() {
     // Create DPDKWritePoller instance
     center->dispatch_event_external(connection->write_handler);
     dpdk_write_poller = std::make_unique<DPDKWritePoller>(center, this);
-    ldout(cct, 10) << __func__ << " DPDK write poller initialized" << dendl;
+    ldout(cct, 1) << __func__ << " DPDK write poller initialized" << dendl;
   }
 }
 void ProtocolV2::write_event() {
