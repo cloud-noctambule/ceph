@@ -364,6 +364,7 @@ class DPDKQueuePair {
 
     bool check_del_ref_count() {
       if (_p) {
+        return true;
         return _p->get_del_ref_count()<=1;
       }
       return true;
