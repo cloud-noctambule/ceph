@@ -32,6 +32,7 @@
 #include "common/perf_counters.h"
 #include "include/buffer.h"
 #include "msg/Connection.h"
+#include "msg/Message.h"
 #include "msg/Messenger.h"
 
 #include "Event.h"
@@ -191,7 +192,7 @@ private:
 
   // lockfree, only used in own thread
   ceph::buffer::list outgoing_bl;
-  std::list<Packet*> outgoing_packets;
+  std::list<std::pair<Packet*, DPDKMessage*>> outgoing_packets;
   bool open_write = false;
 
   std::mutex write_lock;

@@ -338,7 +338,9 @@ ssize_t AsyncConnection::write(ceph::buffer::list &bl,
 
 ssize_t AsyncConnection::_try_send_dpdk(){
   while (!outgoing_packets.empty()) {
-    cs.send_dpdk_packet(outgoing_packets.front());
+    std::pair<Packet*, DPDKMessage*>& p = outgoing_packets.front();
+    cs.send_dpdk_packet(p.first);
+    p.second->put();
     outgoing_packets.pop_front();
   }
   return 0;

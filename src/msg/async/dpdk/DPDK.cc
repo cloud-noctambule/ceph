@@ -1272,6 +1272,7 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
         fragment& frag0 = p.frag(0);
         if( !buf){
           ldout(cct, 1) << __func__ << " no available tx buf" << dendl;
+          sleep(1 );
           return nullptr;
         }
         // mbuf_put()

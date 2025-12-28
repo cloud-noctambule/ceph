@@ -4,6 +4,7 @@
 #include <asm-generic/errno-base.h>
 #include <type_traits>
 #include <unistd.h>
+#include <utility>
 
 #include "ProtocolV2.h"
 #include "AsyncMessenger.h"
@@ -492,8 +493,9 @@ int ProtocolV2::send_dpdk_message(DPDKMessage *dpdk_msg) {
     dpdk_msg->trace.event("async enqueueing message");
     bool ret = dpdk_out_queue.push(dpdk_msg);
     if (!ret) {
-      ldout(cct, 10) << __func__ << " dpdk_out_queue is full, drop dpdk_msg=" << dpdk_msg << dendl;
+      ldout(cct, 5) << __func__ << " dpdk_out_queue is full, drop dpdk_msg=" << dpdk_msg << dendl;
     }
+
     return ret?0:-1;
   }
   return 0;
@@ -592,6 +594,7 @@ ProtocolV2::out_queue_entry_t ProtocolV2::_get_next_outgoing() {
 }
 ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
   if(connection->outgoing_bl.length() > 0){
+    ldout(cct, 5) << __func__ <<" bl not send complete "<<dendl;
     ssize_t ret = connection->_try_send(false);
     if(ret < 0){
       return ret;
@@ -670,13 +673,12 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
     dpdk_msg->compack_packet_set_header(frag);
     constexpr int max_frags = 31;
     Packet* pack = dpdk_msg->get_compacked_packet();
-    if(connection->outgoing_packets.back()->nr_frags() + pack->nr_frags() < max_frags){
-      connection->outgoing_packets.back()->append(std::move(*pack));
+    if(!connection->outgoing_packets.empty() && connection->outgoing_packets.back().first->nr_frags() + pack->nr_frags() < max_frags){
+      connection->outgoing_packets.back().first->append(std::move(*pack));
     }
     else{
-      connection->outgoing_packets.push_back(pack);
+      connection->outgoing_packets.emplace_back(pack, dpdk_msg);
     }
-    dpdk_msg->put();
   }else{
     //TO_DO: 聚合多个Message的头部到一起，从而减少开销
     ceph_abort();
@@ -802,9 +804,11 @@ void ProtocolV2::reset_compression() {
 void ProtocolV2::write_for_dpdk(){
   bool ret = false;
   DPDKMessage* dpdk_msg; 
+  // ldout(cct, 5) << __func__ << dendl;
   do{
     ret = dpdk_out_queue.pop(dpdk_msg);
     if(ret){
+      ldout(cct, 5) << __func__ << " write_dpdk_message dpdk_msg=" << dpdk_msg << dendl;
       write_dpdk_message(dpdk_msg);
     }
   }while(ret == true);

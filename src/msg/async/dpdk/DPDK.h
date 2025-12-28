@@ -566,7 +566,7 @@ class DPDKQueuePair {
             }
             it = next_it; // 用提前记录的下一个迭代器更新
         }
-        for (; cnt < gc_count; ++cnt) {
+        for (; cnt < 30; ++cnt) {
           auto tx_buf_p = get_one_completed();
           if (!tx_buf_p) {
             return false;
