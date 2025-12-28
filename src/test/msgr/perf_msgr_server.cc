@@ -30,7 +30,7 @@ using namespace std;
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
 #include "auth/DummyAuth.h"
-
+static bool receive_dpdk_message = false;
 class ServerDispatcher : public Dispatcher {
   uint64_t think_time;
   ThreadPool op_tp;
@@ -158,6 +158,13 @@ int main(int argc, char **argv)
     bool force_zero_copy_in_stack = false;
     if(args.size()>4&&(args[4][0] == 'z' || args[4][0] == 'Z')){
       force_zero_copy_in_stack = true;
+    }
+    if(args.size()>5&&(args[5][0] == 'd' || args[5][0] == 'D')){
+      receive_dpdk_message = true;
+      g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "true",&cout_ss);
+    }
+    else{
+      g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "false",&cout_ss);
     }
     std::stringstream cout_ss; // 创建一个stringstream对象
     

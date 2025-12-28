@@ -113,6 +113,7 @@ ProtocolV2::ProtocolV2(AsyncConnection *connection)
       dpdk_use(false),
       keepalive(false) {
         dpdk_use =  cct->_conf.get_val<bool>("ms_dpdk_with_dpdk_message");
+        dpdk_work_throught_encode = cct->_conf.get_val<bool>("ms_dpdk_work_throught_encode");
 }
 
 ProtocolV2::~ProtocolV2() {
@@ -1231,9 +1232,6 @@ CtPtr ProtocolV2::read_frame() {
   }
 
   ldout(cct, 20) << __func__ << dendl;
-  rx_preamble.clear();
-  rx_epilogue.clear();
-  rx_segments_data.clear();
   if(dpdk_use){
     if(connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE)){
       // read as DPDKMessage
@@ -1245,6 +1243,9 @@ CtPtr ProtocolV2::read_frame() {
       return read_dpdk();
     }
   }
+  rx_preamble.clear();
+  rx_epilogue.clear();
+  rx_segments_data.clear();
   return READ(rx_frame_asm.get_preamble_onwire_len(),
               handle_read_frame_preamble_main);
 }
