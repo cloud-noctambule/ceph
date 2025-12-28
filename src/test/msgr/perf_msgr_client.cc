@@ -158,18 +158,21 @@ class MessengerClient {
         int sid_index = i % sid->size();
         dpdk_msg->set_tid(make_tid(record_start_pos[sid_index],sid_index));
         int to_send_data_off = 0;
-        while(to_send_data_off <= msg_len){
+        while(to_send_data_off < msg_len){
           fragment frag ;
           bool ret =(*conns)[sid_index]->get_a_frag(frag);
           if(!ret){
             // std::cout<<"get_a_frag failed"<<std::endl;
             continue;
           }
-          vecs.push_back(frag);
-          int to_copy = min(msg_len - to_send_data_off, static_cast<int>(vecs.back().size));
-          memcpy(vecs.back().base,pure_data+to_send_data_off,to_copy);
+          std::cout<<"msg_len "<<msg_len<<" frag size:"<<frag.size<<", to_send_data_off:"<<to_send_data_off<<std::endl;
+          int to_copy = min(msg_len - to_send_data_off, static_cast<int>(frag.size));
+          memcpy(frag.base,pure_data+to_send_data_off,to_copy);
+          frag.size = to_copy;
           to_send_data_off +=to_copy;
+          vecs.push_back(frag);
         }
+        std::cout<<"send dpdk message, tid:"<<dpdk_msg->get_tid()<<std::endl;
         dpdk_msg->set_data(std::move(Packet(vecs, deleter())));
         (*conns)[sid_index]->send_dpdk_message(dpdk_msg);
         inflight++;

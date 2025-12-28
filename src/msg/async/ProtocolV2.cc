@@ -636,11 +636,11 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
     preamble->num_segments = 4;
     preamble->segments[0].length = ceph_le32(sizeof(ceph_msg_header2));
     preamble->segments[0].alignment = ceph_le16(segment_t::DEFAULT_ALIGNMENT);
-    preamble->segments[1].length = ceph_le32(dpdk_msg->get_payload().len());
+    preamble->segments[1].length = ceph_le32(dpdk_msg->get_payload_len());
     preamble->segments[1].alignment = ceph_le16(segment_t::DEFAULT_ALIGNMENT);
-    preamble->segments[2].length = ceph_le32(dpdk_msg->get_middle().len());
+    preamble->segments[2].length = ceph_le32(dpdk_msg->get_middle_len());
     preamble->segments[2].alignment = ceph_le16(segment_t::DEFAULT_ALIGNMENT);
-    preamble->segments[3].length = ceph_le32(dpdk_msg->get_data().len());
+    preamble->segments[3].length = ceph_le32(dpdk_msg->get_data_len());
     preamble->segments[3].alignment = ceph_le16(segment_t::DEFAULT_ALIGNMENT);
     preamble->flags = 0;
     preamble-> crc = ceph_crc32c(
@@ -666,9 +666,9 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
       epilogue->crc_values[i] =  0;
     }
     epilogue->crc_values[0] = ceph_crc32c(0, reinterpret_cast<const unsigned char*>(header2), sizeof(ceph_msg_header2));
-    epilogue->crc_values[1] = dpdk_msg->get_payload().crc32c();
-    epilogue->crc_values[2] = dpdk_msg->get_middle().crc32c();
-    epilogue->crc_values[3] = dpdk_msg->get_data().crc32c();
+    epilogue->crc_values[1] = dpdk_msg->get_payload_crc32c();
+    epilogue->crc_values[2] = dpdk_msg->get_middle_crc32c();
+    epilogue->crc_values[3] = dpdk_msg->get_data_crc32c();
     frag.size = preabmble_epilogue_header_size;
     dpdk_msg->compack_packet_set_header(frag);
     constexpr int max_frags = 31;

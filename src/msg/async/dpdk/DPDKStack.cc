@@ -240,6 +240,7 @@ int DPDKWorker::connect(const entity_addr_t &addr, const SocketOptions &opts, Co
   // ceph_assert(addr.get_family() == AF_INET);
   int r =  tcpv4_connect(_impl->_inet.get_tcp(), addr, socket);
   socket->worker_id = id;
+  ldout(cct, 1) << __func__ << "set worker_id " << id << dendl;
   ldout(cct, 10) << __func__ << " addr " << addr << dendl;
   return r;
 }

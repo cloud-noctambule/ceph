@@ -283,7 +283,13 @@ public:
       byte_throttler->put(data.value().len());
     pkt = std::move(data.value());
   }
-  uint32_t get_data_len() const { return data.value().len(); }
+  uint32_t get_data_len() const { 
+    return data.has_value() ? data.value().len() : 0; }
+  uint32_t get_middle_len() const { return middle.has_value() ? middle.value().len() : 0; }
+  uint32_t get_payload_len() const { return payload.has_value() ? payload.value().len() : 0; }
+  uint32_t get_payload_crc32c() const { return payload.has_value() ? payload.value().crc32c() : 0; }
+  uint32_t get_middle_crc32c() const { return middle.has_value() ? middle.value().crc32c() : 0; }
+  uint32_t get_data_crc32c() const { return data.has_value() ? data.value().crc32c() : 0; }
 
   void set_recv_stamp(utime_t t) { recv_stamp = t; }
   const utime_t& get_recv_stamp() const { return recv_stamp; }

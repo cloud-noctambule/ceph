@@ -476,7 +476,7 @@ class DPDKQueuePair {
         }
         rte_mbuf* buf = pkt->rte_mbuf_p();
         frag.base = rte_pktmbuf_mtod(buf, char*);
-        frag.size = rte_pktmbuf_data_len(buf);
+        frag.size = inline_mbuf_data_size;
         frag.mbuf_ptr = buf;
       }
       return true;
@@ -645,6 +645,7 @@ class DPDKQueuePair {
     std::vector<tx_buf*> _ring;
     boost::lockfree::queue<tx_buf*> _ring_share;
     std::list<tx_buf*> _later_to_free;
+    static constexpr size_t inline_mbuf_data_size = 2048;
     rte_mempool* _pool = nullptr;
     bool use_lock;
     const static int local_cache_size;
