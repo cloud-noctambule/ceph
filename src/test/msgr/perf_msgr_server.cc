@@ -28,6 +28,7 @@ using namespace std;
 #include "global/global_init.h"
 #include "msg/Messenger.h"
 #include "messages/MOSDOp.h"
+#include "msg/DPDKMessage.h"
 #include "messages/MOSDOpReply.h"
 #include "auth/DummyAuth.h"
 static bool receive_dpdk_message = false;
@@ -60,9 +61,17 @@ class ServerDispatcher : public Dispatcher {
     }
     void _process(Message *m, ThreadPool::TPHandle &handle) override {
       MOSDOp *osd_op = static_cast<MOSDOp*>(m);
-      MOSDOpReply *reply = new MOSDOpReply(osd_op, 0, 0, 0, false);
-      m->get_connection()->send_message(reply);
-      m->put();
+      if(receive_dpdk_message) {
+        DPDKMessage *dpdk_msg = new DPDKMessage();
+        dpdk_msg->set_tid(osd_op->get_tid());
+        m->get_connection()->send_dpdk_message(dpdk_msg);
+      }
+      else{
+        MOSDOpReply *reply = new MOSDOpReply(osd_op, 0, 0, 0, false);
+        m->get_connection()->send_message(reply);
+        m->put();
+      }
+
     }
     void _process_finish(Message *m) override { }
     void _clear() override {
@@ -155,6 +164,7 @@ int main(int argc, char **argv)
     cout<<cout_ss.str()<<std::endl;
   }
   if(args.size()>3&&(args[3][0] == 'd' || args[3][0] == 'D')){
+    std::stringstream cout_ss; // 创建一个stringstream对象
     bool force_zero_copy_in_stack = false;
     if(args.size()>4&&(args[4][0] == 'z' || args[4][0] == 'Z')){
       force_zero_copy_in_stack = true;
@@ -166,8 +176,6 @@ int main(int argc, char **argv)
     else{
       g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "false",&cout_ss);
     }
-    std::stringstream cout_ss; // 创建一个stringstream对象
-    
     g_ceph_context->_conf.set_val("ms_type", "async+dpdk",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_memory_channel", "2",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_hw_queue_weight", "1",&cout_ss);

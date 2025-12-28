@@ -153,6 +153,9 @@ public:
     }
     else if(data.has_value())
       packed_packet = std::move(data.value());
+    else{
+      packed_packet = std::move(Packet());
+    }
     packed_packet->set_protocol_header(frag);
   }
   Packet* get_compacked_packet() {

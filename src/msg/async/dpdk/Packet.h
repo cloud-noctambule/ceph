@@ -102,7 +102,8 @@ class Packet {
     char data[internal_data_size]; // only frags[0] may use
     unsigned headroom = internal_data_size; // in data
     // FIXME: share data/frags space
-    fragment protocol_header;
+    fragment protocol_header={nullptr, 0,nullptr};
+    bool has_header = false;
     fragment frags[];
 
     explicit impl(size_t nr_frags = default_nr_frags);
@@ -248,7 +249,8 @@ public:
   }
   fragment frag(unsigned idx) const { return _impl->frags[idx]; }
   fragment& frag(unsigned idx) { return _impl->frags[idx]; }
-  void set_protocol_header(fragment frag) { _impl->protocol_header = frag; }
+  void set_protocol_header(fragment frag) { _impl->protocol_header = frag; _impl->has_header = true; }
+  fragment& get_protocol_header() { return _impl->protocol_header; }
   unsigned nr_frags() const { return _impl->_nr_frags; }
   pseudo_vector fragments() const { return { _impl->frags, _impl->_nr_frags }; }
   fragment* fragment_array() const { return _impl->frags; }

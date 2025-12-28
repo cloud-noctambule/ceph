@@ -15,6 +15,7 @@
 #include "auth/AuthClient.h"
 #include "auth/AuthServer.h"
 #include "msg/DPDKMessage.h"
+#include "messages/MOSDOp.h"
 #include "msg/async/Protocol.h"
 #include "msg/async/dpdk/Packet.h"
 #include "msg/async/frames_v2.h"
@@ -111,14 +112,21 @@ ProtocolV2::ProtocolV2(AsyncConnection *connection)
       dpdk_out_queue(4096),
       dpdk_message_to_decodes(4096),
       dpdk_use(false),
+      dpdk_share_protocol_header(false),
       keepalive(false) {
         dpdk_use =  cct->_conf.get_val<bool>("ms_dpdk_with_dpdk_message");
         dpdk_work_throught_encode = cct->_conf.get_val<bool>("ms_dpdk_work_throught_encode");
+          object_t oid("dpdk-message wapper");
+          pg_t pgid;
+          object_locator_t oloc;
+          hobject_t hobj(oid, oloc.key, CEPH_NOSNAP, pgid.ps(),
+		         pgid.pool(), oloc.nspace);
+          spg_t spgid(pgid);
+        dpdk_msg_wrapper = new MOSDOp(0, 0, hobj, spgid, 0, 0, 0);
 }
 
 ProtocolV2::~ProtocolV2() {
 }
-
 void ProtocolV2::connect() {
   ldout(cct, 1) << __func__ << dendl;
   state = START_CONNECT;
@@ -595,6 +603,7 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
     bool ret = connection->get_a_frag(frag);//TO_DO
     if(!frag.mbuf_ptr){
       ldout(cct, 1) << __func__ << " error alloc mbuf" << dendl;
+      ceph_abort();
       return -ENOMEM;
     }    
     int frag_size = frag.size;
@@ -643,6 +652,7 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
     epilogue->crc_values[1] = dpdk_msg->get_payload().crc32c();
     epilogue->crc_values[2] = dpdk_msg->get_middle().crc32c();
     epilogue->crc_values[3] = dpdk_msg->get_data().crc32c();
+    frag.size = preabmble_epilogue_header_size;
     dpdk_msg->compack_packet_set_header(frag);
     constexpr int max_frags = 31;
     Packet* pack = dpdk_msg->get_compacked_packet();
@@ -652,6 +662,7 @@ ssize_t ProtocolV2::write_dpdk_message(DPDKMessage* dpdk_msg){
     else{
       connection->outgoing_packets.push_back(pack);
     }
+    dpdk_msg->put();
   }else{
     //TO_DO: 聚合多个Message的头部到一起，从而减少开销
     ceph_abort();

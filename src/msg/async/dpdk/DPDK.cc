@@ -1255,22 +1255,36 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
     unsigned nsegs = 0;
     // 现在头部为网络栈的数据，基本都是要拷贝的。
     if (!check_frag0(p)) {
-      tx_buf* buf = qp.get_tx_buf();
-      fragment& frag0 = p.frag(0);
-      if( !buf){
-        ldout(cct, 1) << __func__ << " no available tx buf" << dendl;
-        return nullptr;
+      auto& head_frag = p.get_protocol_header();
+      if( head_frag.mbuf_ptr != nullptr){
+        ceph_assert( head_frag.size + p.frag(0).size <= inline_mbuf_data_size);
+        char temp[256];
+        memcpy(temp, head_frag.base, head_frag.size);
+        memcpy(head_frag.base, p.frag(0).base, p.frag(0).size);
+        memcpy(head_frag.base + p.frag(0).size, temp, head_frag.size - p.frag(0).size);
+        rte_mbuf* m = (rte_mbuf*)head_frag.mbuf_ptr;
+        m->data_len = head_frag.size + p.frag(0).size;
+        m->pkt_len  = head_frag.size + p.frag(0).size;
+        head = m;
       }
-      // mbuf_put()
-      rte_mbuf* m = buf->rte_mbuf_p();
-      m->data_len = frag0.size;
-      m->pkt_len  = frag0.size;
+      else{
+        tx_buf* buf = qp.get_tx_buf();
+        fragment& frag0 = p.frag(0);
+        if( !buf){
+          ldout(cct, 1) << __func__ << " no available tx buf" << dendl;
+          return nullptr;
+        }
+        // mbuf_put()
+        rte_mbuf* m = buf->rte_mbuf_p();
+        m->data_len = frag0.size;
+        m->pkt_len  = frag0.size;
 
-      qp.perf_logger->inc(l_dpdk_qp_tx_copy_ops);
-      qp.perf_logger->inc(l_dpdk_qp_tx_copy_bytes, frag0.size);
-      char* m_data = rte_pktmbuf_mtod(m, char*);
-      memcpy(m_data, frag0.base, frag0.size);
-      head = m;
+        qp.perf_logger->inc(l_dpdk_qp_tx_copy_ops);
+        qp.perf_logger->inc(l_dpdk_qp_tx_copy_bytes, frag0.size);
+        char* m_data = rte_pktmbuf_mtod(m, char*);
+        memcpy(m_data, frag0.base, frag0.size);
+        head = m;
+      }
       last_seg = head;
       nsegs = 1;
     }

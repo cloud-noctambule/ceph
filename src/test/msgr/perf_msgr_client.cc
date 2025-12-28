@@ -448,6 +448,7 @@ int main(int argc, char **argv)
       use_dpdk_zero_copy = true;
       query_dpdk_recv_queue = true;
       g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "true",&cout_ss);
+      g_ceph_context->_conf.set_val("ms_dpdk_work_throught_encode", "true",&cout_ss);
     }
     else{
       g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "false",&cout_ss);
