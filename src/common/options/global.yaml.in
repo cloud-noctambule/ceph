@@ -1504,6 +1504,11 @@ options:
   level: advanced
   default: false
   with_legacy: true
+- name: ms_dpdk_with_dpdk_message
+  type: bool
+  level: advanced
+  default: false
+  with_legacy: true
 - name: ms_dpdk_debug_allow_loopback
   type: bool
   level: dev

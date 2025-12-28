@@ -96,6 +96,7 @@ class DPDKQueuePair {
   using packet_provider_type = std::function<std::optional<Packet> ()>;
  public:
   bool is_force_zero_copy_enabled;
+  bool use_dpdk_message;
   void configure_proxies(const std::map<unsigned, float>& cpu_weights);
   // build REdirection TAble for cpu_weights map: target cpu -> weight
   void build_sw_reta(const std::map<unsigned, float>& cpu_weights);

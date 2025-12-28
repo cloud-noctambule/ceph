@@ -437,6 +437,7 @@ int main(int argc, char **argv)
     cout<<cout_ss.str()<<std::endl;
   }
   if(args.size()>7&&(args[7][0] == 'd' || args[7][0] == 'D')){
+    std::stringstream cout_ss; // 创建一个stringstream对象
     bool force_zero_copy_in_stack = false;
     if(args.size()>8&&(args[8][0] == 'z' || args[8][0] == 'Z')){
       std::cout<<"force_zero_copy_in_stack"<<std::endl;
@@ -446,8 +447,11 @@ int main(int argc, char **argv)
       std::cout<<"send_dpdk_message"<<std::endl;
       use_dpdk_zero_copy = true;
       query_dpdk_recv_queue = true;
+      g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "true",&cout_ss);
     }
-    std::stringstream cout_ss; // 创建一个stringstream对象
+    else{
+      g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "false",&cout_ss);
+    }
     g_ceph_context->_conf.set_val("ms_type", "async+dpdk",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_memory_channel", "2",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_hw_queue_weight", "1",&cout_ss);
@@ -464,6 +468,7 @@ int main(int argc, char **argv)
     else{
       g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
     }
+
     // g_ceph_context->_conf.set_val("debug_dpdk", "10/10", &cout_ss);
     // g_ceph_context->_conf.set_val("debug_ms", "20/20", &cout_ss);
     cout<<cout_ss.str()<<std::endl;

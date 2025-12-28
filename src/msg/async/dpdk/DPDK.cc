@@ -638,6 +638,7 @@ DPDKQueuePair::DPDKQueuePair(CephContext *c, EventCenter *cen, DPDKDevice* dev, 
     _tx_gc_poller(this),_lock_free_rx_pkts(mbufs_per_queue_rx)
 {
   is_force_zero_copy_enabled = cct->_conf.get_val<bool>("ms_dpdk_force_zero_copy");
+  use_dpdk_message = cct->_conf.get_val<bool>("ms_dpdk_with_dpdk_message");
   if(is_force_zero_copy_enabled){
     ldout(cct, 0) << __func__ << "is_force_zero_copy_enabled: force zero copy is enabled" << dendl;
   }
@@ -1295,7 +1296,16 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
           continue;
         }
         else{
-          ceph_abort("strange packet frag " << i << " need copy");
+          if(qp.use_dpdk_message){
+            ceph_abort("strange packet frag " << i << " need copy");
+          }
+          else{ //uplayer may not sense DPDK rte_mbuf , need copy by hand
+            if (!translate_one_frag(qp, p.frag(i), h, new_last_seg, nsegs)) {
+              ldout(cct, 1) << __func__ << " no available mbuf for " << p.frag(i).size << dendl;
+              me(head)->recycle();
+              return nullptr;
+            }
+          }
         }
       }
       total_nsegs += nsegs;

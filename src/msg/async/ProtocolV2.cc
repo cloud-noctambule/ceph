@@ -112,6 +112,7 @@ ProtocolV2::ProtocolV2(AsyncConnection *connection)
       dpdk_message_to_decodes(4096),
       dpdk_use(false),
       keepalive(false) {
+        dpdk_use =  cct->_conf.get_val<bool>("ms_dpdk_with_dpdk_message");
 }
 
 ProtocolV2::~ProtocolV2() {
