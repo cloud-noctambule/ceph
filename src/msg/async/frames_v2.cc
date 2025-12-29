@@ -45,6 +45,7 @@ static void check_segment_crc(const bufferlist& segment_bl,
                               uint32_t expected_crc) {
   uint32_t crc = segment_bl.crc32c(-1);
   if (crc != expected_crc) {
+    ceph_assert(false);
     throw FrameError(fmt::format(
         "bad segment crc calculated={} expected={}", crc, expected_crc));
   }

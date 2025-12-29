@@ -12,6 +12,7 @@
 #include "common/EventTrace.h"
 #include "common/ceph_crypto.h"
 #include "common/errno.h"
+#include "include/ceph_assert.h"
 #include "include/random.h"
 #include "auth/AuthClient.h"
 #include "auth/AuthServer.h"
@@ -1292,7 +1293,8 @@ CtPtr ProtocolV2::read_frame() {
 
   ldout(cct, 20) << __func__ << dendl;
   if(dpdk_use && state >= SESSION_ACCEPTING){
-    if(connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE) == 0){
+    auto ret = connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE);
+    if( ret == 0){
       // read as DPDKMessage
       // 需要确保读取的时候没有数据后切换，到rx_poll的流程?
       // 直接将DPDKMessage加入到dpdk_message_to_decodes队列中
@@ -1301,6 +1303,11 @@ CtPtr ProtocolV2::read_frame() {
       next_tag = Tag::DPDK_MESSAGE;
       pre_msg = nullptr;
       return read_dpdk();
+    }
+    ldout(cct, 5) << __func__ << " peek DPDK_MESSAGE tag ret : "<< ret << dendl;
+    if( ret == -EAGAIN){
+      // 没有数据可读，切换到rx_poll流程
+      return nullptr;
     }
   }
   rx_preamble.clear();
@@ -1407,6 +1414,9 @@ CtPtr ProtocolV2::handle_read_frame_preamble_main(rx_buffer_t &&buffer, int r) {
 
   try {
     next_tag = rx_frame_asm.disassemble_preamble(rx_preamble);
+    if(next_tag == Tag::DPDK_MESSAGE){
+      ceph_abort("DPDK_MESSAGE should not enter this Way?");
+    }
   } catch (FrameError& e) {
     ldout(cct, 1) << __func__ << " " << e.what() << dendl;
     return _fault();
