@@ -1292,7 +1292,7 @@ CtPtr ProtocolV2::read_frame() {
   }
 
   ldout(cct, 20) << __func__ << dendl;
-  if(dpdk_use && state >= SESSION_ACCEPTING){
+  if(dpdk_use && state >= READY){
     auto ret = connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE);
     if( ret == 0){
       // read as DPDKMessage
