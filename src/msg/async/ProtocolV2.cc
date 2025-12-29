@@ -1292,11 +1292,12 @@ CtPtr ProtocolV2::read_frame() {
 
   ldout(cct, 20) << __func__ << dendl;
   if(dpdk_use && state >= SESSION_ACCEPTING){
-    if(connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE)){
+    if(connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE) == 0){
       // read as DPDKMessage
       // 需要确保读取的时候没有数据后切换，到rx_poll的流程?
       // 直接将DPDKMessage加入到dpdk_message_to_decodes队列中
       // 便于解耦decode工作和后面的派发工作
+      ldout(cct, 5) << __func__ << "normal preabmle size "<<rx_frame_asm.get_preamble_onwire_len()<< " read as DPDKMessage" << dendl;
       next_tag = Tag::DPDK_MESSAGE;
       pre_msg = nullptr;
       return read_dpdk();
@@ -1316,11 +1317,12 @@ CtPtr ProtocolV2::read_dpdk(){
   else{
     ceph_abort();
   }
+  ldout(cct, 5) << __func__ << " read DPDKMessage preamble size : "<<sizeof(preamble_block_t) << dendl;
   constexpr ssize_t preabmble_epilogue_header_size = sizeof(ceph_msg_header2) + sizeof(preamble_block_t) + sizeof(epilogue_crc_rev0_block_t);
   Packet preamble_epilogue_header_packet;
   ssize_t ret = connection->read_until_dpdk(preamble_epilogue_header_packet, preabmble_epilogue_header_size);
   if(ret < 0){
-    return nullptr;
+    ceph_abort();
   }
   if(preamble_epilogue_header_packet.nr_frags() !=1){
     //to_do: need carefully deal with this case;
@@ -1466,6 +1468,10 @@ CtPtr ProtocolV2::handle_read_frame_dispatch() {
     case Tag::MESSAGE:
       return handle_message();
     default: {
+      if(next_tag == Tag::DPDK_MESSAGE){
+        ldout(cct, 5) << __func__ << " received DPDK_MESSAGE tag=" << static_cast<uint32_t>(next_tag) << dendl;
+        ceph_abort("DPDK_MESSAGE should not enter this Way?");
+      }
       lderr(cct) << __func__
                  << " received unknown tag=" << static_cast<uint32_t>(next_tag)
                  << dendl;

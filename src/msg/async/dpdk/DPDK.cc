@@ -1049,7 +1049,7 @@ void DPDKQueuePair::process_packets(
     if (m->ol_flags & PKT_RX_RSS_HASH) {
       p->set_rss_hash(m->hash.rss);
     }
-    ldout(cct, 5) <<__func__<<"will to l2 , packet len : "<<bytes<<" packet frags : "<< nr_frags <<"p len "<<p->len()<<" p frags"<<p->nr_frags() << dendl;  //debug
+    ldout(cct, 5) <<__func__<<" will to l2 , packet len : "<<bytes<<" packet frags : "<< nr_frags <<"p len "<<p->len()<<" p frags"<<p->nr_frags() << dendl;  //debug
     //std::cout<<"func process_packets :  std::endl;  //debug
     _dev->l2receive(_qid, std::move(*p));
   }
