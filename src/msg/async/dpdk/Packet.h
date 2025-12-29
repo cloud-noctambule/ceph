@@ -429,7 +429,11 @@ inline Packet::Packet(fragment frag, Packet&& x)
             std::move(_impl->_deleter), [buf] { delete []buf; });
   }
 }
-
+// inline Packet::Packet(Packet&& x, fragment frag)
+//     : _impl(impl::allocate_if_needed(std::move(x._impl), 1)) {
+//   _impl->_len += frag.size;
+//   _impl->frags[_impl->_nr_frags++] = frag;
+// }
 inline Packet::Packet(Packet&& x, fragment frag, deleter d)
     : _impl(impl::allocate_if_needed(std::move(x._impl), 1)) {
   _impl->_len += frag.size;

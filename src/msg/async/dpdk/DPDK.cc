@@ -1245,7 +1245,7 @@ void DPDKQueuePair::tx_buf::set_cluster_offload_info(const Packet& p, const DPDK
 DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
         CephContext *cct, Packet&& p, DPDKQueuePair& qp)
 {
-  ldout(cct, 10) << __func__ << " len " << p.len() << " frags " << p.nr_frags() << dendl;  //debug
+  ldout(cct, 5) << __func__ << " len " << p.len() << " frags " << p.nr_frags() << dendl;  //debug
   if( qp.is_force_zero_copy_enabled){
     // Too fragmented - linearize
     if (p.nr_frags() > max_frags) {

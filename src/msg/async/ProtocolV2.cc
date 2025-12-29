@@ -812,7 +812,9 @@ void ProtocolV2::write_for_dpdk(){
       write_dpdk_message(dpdk_msg);
     }
   }while(ret == true);
-  connection->_try_send_dpdk();
+  if(state >= READY && state != CLOSED){
+    connection->_try_send_dpdk();
+  }
 }
 
 // DPDK Write Poller to encapsulate write_for_dpdk

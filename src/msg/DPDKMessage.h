@@ -139,24 +139,17 @@ public:
   }
   void compack_packet_set_header(fragment& frag) {
     packet_compacked = true;
+    packed_packet = Packet(frag, deleter());
     if(payload.has_value()){
-      packed_packet = std::move(payload.value());
-      if(middle.has_value())
-        packed_packet->append(std::move(middle.value()));
-      if(data.has_value())
-        packed_packet->append(std::move(data.value()));
+      packed_packet->append(std::move(payload.value()));
     }
-    else if(middle.has_value()){
-      packed_packet = std::move(middle.value());
-      if(data.has_value())
-        packed_packet->append(std::move(data.value()));
+    if(middle.has_value()){
+      packed_packet->append(std::move(middle.value()));
     }
-    else if(data.has_value())
-      packed_packet = std::move(data.value());
-    else{
-      packed_packet = std::move(Packet());
+    if(data.has_value()){
+      packed_packet->append(std::move(data.value()));
     }
-    packed_packet->set_protocol_header(frag);
+    // packed_packet->set_protocol_header(frag);
   }
   Packet* get_compacked_packet() {
     return packet_compacked ? &packed_packet.value() : nullptr;
