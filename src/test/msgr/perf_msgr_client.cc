@@ -468,8 +468,8 @@ int main(int argc, char **argv)
     g_ceph_context->_conf.set_val("ms_dpdk_hw_queue_weight", "1",&cout_ss);
     g_ceph_context->_conf.set_val("ms_async_op_threads", "1",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_gateway_ipv4_addr", "192.168.0.53",&cout_ss);
-    // g_ceph_context->_conf.set_val("ms_dpdk_devs_allowlist", "--allow=0000:ca:00.3",&cout_ss);
-    g_ceph_context->_conf.set_val("ms_dpdk_devs_allowlist", "--allow=0000:cb:00.1",&cout_ss);
+    g_ceph_context->_conf.set_val("ms_dpdk_devs_allowlist", "--allow=0000:ca:00.3",&cout_ss);
+    // g_ceph_context->_conf.set_val("ms_dpdk_devs_allowlist", "--allow=0000:cb:00.1",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_netmask_ipv4_addr", "255.255.255.0",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_host_ipv4_addr", "192.168.0.94",&cout_ss);
     if(force_zero_copy_in_stack){

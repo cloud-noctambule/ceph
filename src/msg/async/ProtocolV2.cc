@@ -1297,7 +1297,7 @@ CtPtr ProtocolV2::read_frame() {
       // 需要确保读取的时候没有数据后切换，到rx_poll的流程?
       // 直接将DPDKMessage加入到dpdk_message_to_decodes队列中
       // 便于解耦decode工作和后面的派发工作
-      ldout(cct, 5) << __func__ << "normal preabmle size "<<rx_frame_asm.get_preamble_onwire_len()<< " read as DPDKMessage" << dendl;
+      ldout(cct, 5) << __func__ << " normal preabmle size "<<rx_frame_asm.get_preamble_onwire_len()<< " read as DPDKMessage" << dendl;
       next_tag = Tag::DPDK_MESSAGE;
       pre_msg = nullptr;
       return read_dpdk();
