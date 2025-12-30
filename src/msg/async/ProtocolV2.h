@@ -51,7 +51,13 @@ private:
     WAIT,
     CLOSED
   };
-
+  enum DPDKReadState {
+    DPDK_READ_HEAD,
+    DPDK_READ_PAYLOAD,
+    DPDK_READ_MIDDLE,
+    DPDK_READ_DATA,
+    DPDK_READ_DONE
+  };
   static const char *get_state_name(int state) {
     const char *const statenames[] = {"NONE",
                                       "START_CONNECT",
@@ -115,6 +121,11 @@ private:
   boost::lockfree::queue<DPDKMessage *> dpdk_out_queue;
   bool dpdk_share_protocol_header;
   bool dpdk_use;
+  DPDKReadState dpdk_read_state = DPDK_READ_DONE;
+  DPDKMessage *pending_dpdk_msg = nullptr;
+  ssize_t cur_dpdk_stage_len =0;
+  ssize_t cur_dpdk_read_len  =0;
+
   std::list<Message *> sent;
   std::atomic<uint64_t> out_seq{0};
   std::atomic<uint64_t> in_seq{0};

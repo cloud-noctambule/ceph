@@ -172,6 +172,7 @@ int main(int argc, char **argv)
     if(args.size()>5&&(args[5][0] == 'd' || args[5][0] == 'D')){
       receive_dpdk_message = true;
       g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "true",&cout_ss);
+      g_ceph_context->_conf.set_val("ms_dpdk_work_throught_encode", "true",&cout_ss);
     }
     else{
       g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "false",&cout_ss);

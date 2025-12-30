@@ -160,8 +160,10 @@ class ConnectedSocket {
     return _csi->set_priority(sd, prio, domain);
   }
   bool get_a_frag(fragment& frag) {
-    if(!_csi || worker_id == -1)
+    if(!_csi || worker_id == -1){
+      std::cout<<"worker_id is "<<worker_id<<std::endl;
       return false;
+    }
     return _csi->get_a_frag(frag, worker_id);
   }
   explicit operator bool() const {

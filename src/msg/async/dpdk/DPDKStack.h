@@ -83,8 +83,10 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
   virtual int fast_peek_dpdk_packet_tag(uint32_t tag_offset, char tag_type) override {
     if (!_buf) {
       _buf = std::move(_conn.read());
-      if (!_buf)
+      if (!_buf){
+        ceph_assert( !_cache_ptr.has_value() || (_cache_ptr->length() == 0));
         return -EAGAIN;
+      }
       //make sure internal data only
       ceph_assert(_buf->using_internal_data() == false); 
       _cur_off = 0;
@@ -131,23 +133,32 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
 
   // 新增 zero-copy read 接口，read packet
   ssize_t read(Packet& ret, size_t len) override {
+    ceph_assert( !_cache_ptr.has_value() || (_cache_ptr->length() == 0));
     auto err = _conn.get_errno();
     if (err <= 0)
       return err;
 
     if (!_buf) {
       _buf = std::move(_conn.read());
+      
       //make sure internal data only
-      if (!_buf)
+      if (!_buf){
+        std::cout<<"zero copy read packet, fail, could not read Packet"<<std::endl;
         return -EAGAIN;
+      }
       ceph_assert(_buf->using_internal_data() == false); 
       _cur_off = 0;
     }
-    uint32_t read_len = _buf->len()-_cur_off;
-    if( read_len == 0 ) return -EAGAIN;
+    std::cout<<"zero copy read packet, len : "<<len<<", _buf->len() : "<<_buf->len()<<" cur_off : "<<_cur_off<<std::endl;
+    if( _cur_off == _buf->len() ){
+      _buf.reset();
+      _cur_off = 0;
+      return -EAGAIN;
+    }
     //share函数会自动的share里面的delter
     //deleter本身自带了引用计数
-    ret.append(_buf->share(_cur_off, std::min(len, (size_t)read_len)));
+    uint32_t read_len = std::min(len, (size_t)_buf->len() - _cur_off);
+    ret.append(_buf->share(_cur_off, read_len));
     _cur_off += read_len;
     if (_cur_off >= _buf->len()) {
       _buf.reset();
@@ -291,6 +302,7 @@ int DPDKServerSocketImpl<Protocol>::accept(ConnectedSocket *s, const SocketOptio
   std::unique_ptr<NativeConnectedSocketImpl<Protocol>> csi(
           new NativeConnectedSocketImpl<Protocol>(std::move(*c)));
   *s = ConnectedSocket(std::move(csi));
+  s->worker_id = w->id;
   return 0;
 }
 
