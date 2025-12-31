@@ -1484,6 +1484,7 @@ HEAD_READ:
     }
     dpdk_read_state = DPDK_READ_DONE;
     bool ret = dpdk_message_to_decodes.push(dpdk_msg);
+    state = READY;
     if(!ret){
       ceph_abort("DPDKMessage queue is full, should not happen");
       temp_container.push_back(dpdk_msg);
