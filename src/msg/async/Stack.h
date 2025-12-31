@@ -161,7 +161,7 @@ class ConnectedSocket {
   }
   bool get_a_frag(fragment& frag) {
     if(!_csi || worker_id == -1){
-      std::cout<<"worker_id is "<<worker_id<<std::endl;
+      // std::cout<<"worker_id is "<<worker_id<<std::endl;
       return false;
     }
     return _csi->get_a_frag(frag, worker_id);
