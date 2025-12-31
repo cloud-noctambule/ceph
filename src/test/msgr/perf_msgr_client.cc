@@ -59,8 +59,10 @@ class MessengerClient {
       switch (m->get_type()) {
       case CEPH_MSG_OSD_OPREPLY:
         return thread->check_cid(m->get_tid());
+      case CEPH_MSG_OSD_OP:
+        return thread->check_cid(m->get_tid());
       default:
-        return true;
+        return false;
       }
     }
 
