@@ -61,7 +61,7 @@ class ServerDispatcher : public Dispatcher {
     }
     void _process(Message *m, ThreadPool::TPHandle &handle) override {
       MOSDOp *osd_op = static_cast<MOSDOp*>(m);
-      if(receive_dpdk_message) {
+      if(osd_op->is_dpdk_message_wrapper && receive_dpdk_message) {
         DPDKMessage *dpdk_msg = new DPDKMessage();
         dpdk_msg->set_tid(osd_op->get_tid());
         m->get_connection()->send_dpdk_message(dpdk_msg);

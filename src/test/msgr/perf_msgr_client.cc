@@ -348,7 +348,7 @@ class MessengerClient {
     }
     std::cout<<"ready done!"<<std::endl;
     usleep(1000*1000);
-    // while(1);
+    while(1);
   }
   void start() {
     for (uint64_t i = 0; i < clients.size(); ++i)

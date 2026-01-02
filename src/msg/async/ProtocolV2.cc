@@ -135,6 +135,7 @@ ProtocolV2::ProtocolV2(AsyncConnection *connection)
           spg_t spgid(pgid);
         dpdk_msg_wrapper = new MOSDOp(0, 0, hobj, spgid, 0, 0, 0);
         dpdk_msg_wrapper->set_connection(connection);
+        ((MOSDOp*)dpdk_msg_wrapper)->is_dpdk_message_wrapper = true;
         dpdk_tag_offset = offsetof(preamble_block_t, tag);
         // Initialize DPDK write poller if DPDK is enabled
         EventCallbackRef poller_handler = new C_handle_poller(this);

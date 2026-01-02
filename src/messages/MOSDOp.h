@@ -68,7 +68,7 @@ private:
 
 public:
   friend MOSDOpReply;
-
+  bool is_dpdk_message_wrapper = false;
   ceph_tid_t get_client_tid() { return header.tid; }
   void set_snapid(const snapid_t& s) {
     hobj.snap = s;
