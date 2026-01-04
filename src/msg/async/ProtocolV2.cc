@@ -1302,7 +1302,7 @@ CtPtr ProtocolV2::polling_dpdk_frame(){
         pre_msg = nullptr;
         return read_dpdk();
       }
-      ldout(cct, 5) << __func__ << " peek DPDK_MESSAGE tag ret : "<< ret << dendl;
+      ldout(cct, 15) << __func__ << " peek DPDK_MESSAGE tag ret : "<< ret << dendl;
       if( ret == -EAGAIN){
         // 没有数据可读，切换到rx_poll流程
         return nullptr;
