@@ -31,7 +31,7 @@ using namespace std;
 #include "msg/DPDKMessage.h"
 #include "messages/MOSDOpReply.h"
 #include "auth/DummyAuth.h"
-static bool receive_dpdk_message = false;
+static bool return_dpdk_message = false;
 class ServerDispatcher : public Dispatcher {
   uint64_t think_time;
   ThreadPool op_tp;
@@ -61,7 +61,7 @@ class ServerDispatcher : public Dispatcher {
     }
     void _process(Message *m, ThreadPool::TPHandle &handle) override {
       MOSDOp *osd_op = static_cast<MOSDOp*>(m);
-      if(osd_op->is_dpdk_message_wrapper && receive_dpdk_message) {
+      if(osd_op->is_dpdk_message_wrapper && return_dpdk_message) {
         DPDKMessage *dpdk_msg = new DPDKMessage();
         dpdk_msg->set_tid(osd_op->get_tid());
         m->get_connection()->send_dpdk_message(dpdk_msg);
@@ -69,9 +69,10 @@ class ServerDispatcher : public Dispatcher {
       else{
         MOSDOpReply *reply = new MOSDOpReply(osd_op, 0, 0, 0, false);
         m->get_connection()->send_message(reply);
+      }
+      if(!osd_op->is_dpdk_message_wrapper){
         m->put();
       }
-
     }
     void _process_finish(Message *m) override { }
     void _clear() override {
@@ -170,12 +171,14 @@ int main(int argc, char **argv)
       force_zero_copy_in_stack = true;
     }
     if(args.size()>5&&(args[5][0] == 'd' || args[5][0] == 'D')){
-      receive_dpdk_message = true;
       g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "true",&cout_ss);
       g_ceph_context->_conf.set_val("ms_dpdk_work_throught_encode", "true",&cout_ss);
     }
     else{
       g_ceph_context->_conf.set_val("ms_dpdk_with_dpdk_message", "false",&cout_ss);
+    }
+    if(args.size()>6&&(args[6][0] == 'd' || args[6][0] == 'D')){
+      return_dpdk_message = true;
     }
     g_ceph_context->_conf.set_val("ms_type", "async+dpdk",&cout_ss);
     g_ceph_context->_conf.set_val("ms_dpdk_memory_channel", "2",&cout_ss);
@@ -196,7 +199,7 @@ int main(int argc, char **argv)
       g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
     }
     g_ceph_context->_conf.set_val("debug_dpdk", "6/6", &cout_ss);
-    g_ceph_context->_conf.set_val("debug_ms", "6/6", &cout_ss);
+    g_ceph_context->_conf.set_val("debug_ms", "11/11", &cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);

@@ -348,7 +348,7 @@ class MessengerClient {
     }
     std::cout<<"ready done!"<<std::endl;
     usleep(1000*1000);
-    while(1);
+    // while(1);
   }
   void start() {
     for (uint64_t i = 0; i < clients.size(); ++i)
@@ -483,7 +483,7 @@ int main(int argc, char **argv)
     }
 
     g_ceph_context->_conf.set_val("debug_dpdk", "6/6", &cout_ss);
-    g_ceph_context->_conf.set_val("debug_ms", "6/6", &cout_ss);
+    g_ceph_context->_conf.set_val("debug_ms", "11/11", &cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);
