@@ -412,20 +412,20 @@ void AsyncConnection::process() {
   last_active = ceph::coarse_mono_clock::now();
   recv_start_time = ceph::mono_clock::now();
 
-  ldout(async_msgr->cct, 20) << __func__ << dendl;
+  ldout(async_msgr->cct, 10) << __func__ << dendl;
 
   switch (state) {
     case STATE_NONE: {
-      ldout(async_msgr->cct, 20) << __func__ << " enter none state" << dendl;
+      ldout(async_msgr->cct, 10) << __func__ << " enter none state" << dendl;
       return;
     }
     case STATE_CLOSED: {
-      ldout(async_msgr->cct, 20) << __func__ << " socket closed" << dendl;
+      ldout(async_msgr->cct, 10) << __func__ << " socket closed" << dendl;
       return;
     }
     case STATE_CONNECTING: {
       ceph_assert(!policy.server);
-
+      ldout(async_msgr->cct, 10) << __func__ << " STATE_CONNECTING, connect to " << target_addr << dendl;
       // clear timer (if any) since we are connecting/re-connecting
       if (last_tick_id) {
         center->delete_time_event(last_tick_id);
@@ -458,6 +458,7 @@ void AsyncConnection::process() {
       state = STATE_CONNECTING_RE;
     }
     case STATE_CONNECTING_RE: {
+      ldout(async_msgr->cct, 10) << __func__ << " STATE_CONNECTING_RE" << dendl;
       ssize_t r = cs.is_connected();
       if (r < 0) {
         ldout(async_msgr->cct, 1) << __func__ << " reconnect failed to "
@@ -489,6 +490,7 @@ void AsyncConnection::process() {
     }
 
     case STATE_ACCEPTING: {
+      ldout(async_msgr->cct, 10) << __func__ << " STATE_ACCEPTING" << dendl;
       center->create_file_event(cs.fd(), EVENT_READABLE, read_handler);
       state = STATE_CONNECTION_ESTABLISHED;
       if (async_msgr->cct->_conf->mon_use_min_delay_socket) {
@@ -825,7 +827,7 @@ void AsyncConnection::wakeup_from(uint64_t id)
 void AsyncConnection::tick(uint64_t id)
 {
   auto now = ceph::coarse_mono_clock::now();
-  ldout(async_msgr->cct, 20) << __func__ << " last_id=" << last_tick_id
+  ldout(async_msgr->cct, 10) << __func__ << " last_id=" << last_tick_id
                              << " last_active=" << last_active << dendl;
   std::lock_guard<std::mutex> l(lock);
   last_tick_id = 0;
@@ -854,6 +856,10 @@ void AsyncConnection::tick(uint64_t id)
       protocol->fault();
       labeled_logger->inc(l_msgr_connection_idle_timeouts);
     } else {
+      ldout(async_msgr->cct, 10) << __func__ << " idle (" << idle_period
+                                << ") for more than " << inactive_timeout_us
+                                << " us, keepalive."
+                                << dendl;
       last_tick_id = center->create_time_event(inactive_timeout_us, tick_handler);
     }
   }

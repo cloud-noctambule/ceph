@@ -554,7 +554,7 @@ void ProtocolV2::send_keepalive() {
 }
 
 void ProtocolV2::read_event() {
-  ldout(cct, 20) << __func__ << dendl;
+  ldout(cct, 10) << __func__ <<" current STATE="<< state << dendl;
 
   switch (state) {
     case START_CONNECT:
@@ -1289,6 +1289,9 @@ CtPtr ProtocolV2::handle_hello(ceph::bufferlist &payload)
   return callback;
 }
 CtPtr ProtocolV2::polling_dpdk_frame(){
+  if (state == CLOSED) {
+    return nullptr;
+  }
   if(dpdk_use && state >= READY){
     if(dpdk_read_state == DPDK_READ_DONE){
       auto ret = connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE);
@@ -1319,7 +1322,7 @@ CtPtr ProtocolV2::read_frame() {
     return nullptr;
   }
 
-  ldout(cct, 20) << __func__ << dendl;
+  ldout(cct, 10) << __func__ << dendl;
   if(dpdk_use && state >= READY){
     if(dpdk_read_state == DPDK_READ_DONE){
       auto ret = connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE);
