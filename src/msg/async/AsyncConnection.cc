@@ -342,7 +342,11 @@ ssize_t AsyncConnection::_try_send_dpdk(){
     std::pair<Packet*, DPDKMessage*>& p = outgoing_packets.front();
     ldout(async_msgr->cct, 5) << __func__ << " send_dpdk_packet " << p.first->len()
                                << " bytes, frags " << p.first->nr_frags() << dendl;
-    cs.send_dpdk_packet(p.first);
+    ssize_t r = cs.send_dpdk_packet(p.first);
+    if(r <= 0){
+      ldout(async_msgr->cct, 1) << __func__ << " send_dpdk_packet error: " << cpp_strerror(r) << dendl;
+      return r;
+    }
     p.second->put();
     outgoing_packets.pop_front();
   }
