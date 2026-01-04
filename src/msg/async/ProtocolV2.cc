@@ -821,17 +821,18 @@ void ProtocolV2::write_for_dpdk(){
 }
 
 // DPDK Write Poller to encapsulate write_for_dpdk
-class DPDKWritePoller : public EventCenter::Poller {
+class DPDKPoller : public EventCenter::Poller {
 private:
   ProtocolV2* protocol;
 
 public:
-  explicit DPDKWritePoller(EventCenter* center, ProtocolV2* proto)
-    : Poller(center, "DPDKWritePoller"), protocol(proto) {}
+  explicit DPDKPoller(EventCenter* center, ProtocolV2* proto)
+    : Poller(center, "DPDKPoller"), protocol(proto) {}
 
-  ~DPDKWritePoller() override = default;
+  ~DPDKPoller() override = default;
 
   int poll() override {
+    protocol->polling_dpdk_frame();
     protocol->write_for_dpdk();
     // Return 1 to indicate we did work
     return 1;
@@ -842,9 +843,9 @@ void ProtocolV2::init_dpdk_poller() {
   if (dpdk_use && !dpdk_write_poller) {
     // Get EventCenter from connection
     EventCenter* center = connection->center;
-    // Create DPDKWritePoller instance
+    // Create DPDKPoller instance
     center->dispatch_event_external(connection->write_handler);
-    dpdk_write_poller = std::make_unique<DPDKWritePoller>(center, this);
+    dpdk_write_poller = std::make_unique<DPDKPoller>(center, this);
     ldout(cct, 1) << __func__ << " DPDK write poller initialized" << dendl;
   }
 }
@@ -1287,7 +1288,32 @@ CtPtr ProtocolV2::handle_hello(ceph::bufferlist &payload)
   ceph_assert(callback);
   return callback;
 }
-
+CtPtr ProtocolV2::polling_dpdk_frame(){
+  if(dpdk_use && state >= READY){
+    if(dpdk_read_state == DPDK_READ_DONE){
+      auto ret = connection->fast_peek_dpdk_packet_tag( dpdk_tag_offset,(char)Tag::DPDK_MESSAGE);
+      if( ret == 0){
+        // read as DPDKMessage
+        // 需要确保读取的时候没有数据后切换，到rx_poll的流程?
+        // 直接将DPDKMessage加入到dpdk_message_to_decodes队列中
+        // 便于解耦decode工作和后面的派发工作
+        ldout(cct, 5) << __func__ << " normal preabmle size "<<rx_frame_asm.get_preamble_onwire_len()<< " read as DPDKMessage" << dendl;
+        next_tag = Tag::DPDK_MESSAGE;
+        pre_msg = nullptr;
+        return read_dpdk();
+      }
+      ldout(cct, 5) << __func__ << " peek DPDK_MESSAGE tag ret : "<< ret << dendl;
+      if( ret == -EAGAIN){
+        // 没有数据可读，切换到rx_poll流程
+        return nullptr;
+      }
+    }
+    else{
+      return read_dpdk();
+    }
+  }
+  return nullptr;
+}
 CtPtr ProtocolV2::read_frame() {
   if (state == CLOSED) {
     return nullptr;

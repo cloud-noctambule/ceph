@@ -16,10 +16,10 @@
 #include <sys/types.h>
 
 class EventCenter;
-class DPDKWritePoller;
+class DPDKPoller;
 
 class ProtocolV2 : public Protocol {
-  friend class DPDKWritePoller;
+  friend class DPDKPoller;
 public:
   using CtPtr = Ct<ProtocolV2>*;
 private:
@@ -95,6 +95,7 @@ private:
   // DPDK related methods
   void write_for_dpdk();
   CtPtr read_dpdk();
+  CtPtr polling_dpdk_frame();
   CtPtr handle_dpdk_message();
 public:
   void init_dpdk_poller();
@@ -132,7 +133,7 @@ private:
   std::atomic<uint64_t> ack_left{0};
   
   // DPDK write poller
-  std::unique_ptr<DPDKWritePoller> dpdk_write_poller;
+  std::unique_ptr<DPDKPoller> dpdk_write_poller;
 
   using ProtFuncPtr = void (ProtocolV2::*)();
   Ct<ProtocolV2> *bannerExchangeCallback;
