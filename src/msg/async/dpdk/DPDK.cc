@@ -1527,6 +1527,10 @@ size_t DPDKQueuePair::tx_buf::copy_one_data_buf(
   return len;
 }
 
+void DPDKQueuePair::bypass_logger(const std::string& msg)
+{
+  ldout(cct, 5) << msg << dendl;
+}
 /******************************** Interface functions *************************/
 
 std::unique_ptr<DPDKDevice> create_dpdk_net_device(

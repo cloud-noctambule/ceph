@@ -673,7 +673,7 @@ class DPDKQueuePair {
       return tx_buf::from_packet_zc(cct, std::move(p), *this);
     });
   }
-
+  void bypass_logger(const std::string& msg);
   DPDKDevice& port() const { return *_dev; }
   tx_buf* get_tx_buf() { return _tx_buf_factory.get(); }
   bool get_a_frag(fragment& frag) { return _tx_buf_factory.get_a_frag(frag); }
@@ -683,6 +683,7 @@ class DPDKQueuePair {
  private:
   template <class Func>
   uint32_t _send(circular_buffer<Packet>& pb, Func &&packet_to_tx_buf_p) {
+    bypass_logger("func _send :send packets num: " + std::to_string(pb.size()) + " _tx_burst size: " + std::to_string(_tx_burst.size()));
     if (_tx_burst.size() == 0) {
       
       for (auto&& p : pb) {
@@ -696,13 +697,13 @@ class DPDKQueuePair {
 
         _tx_burst.push_back(buf->rte_mbuf_p());
       }
-      //std::cout<<"func _send :_tx_burst get packets num: "<<_tx_burst.size()<<std::endl;  //debug
+      bypass_logger("func _send :_tx_burst get packets num: " + std::to_string(_tx_burst.size()));
     }
 
     uint16_t sent = rte_eth_tx_burst(_dev_port_idx, _qid,
                                      _tx_burst.data() + _tx_burst_idx,
                                      _tx_burst.size() - _tx_burst_idx);
-    //std::cout<<"func _send :_tx_burst sent packets num: "<<sent<<std::endl;  //debug
+    bypass_logger("func _send :_tx_burst sent packets num: " + std::to_string(sent));
     uint64_t nr_frags = 0, bytes = 0;
 
     for (int i = 0; i < sent; i++) {
