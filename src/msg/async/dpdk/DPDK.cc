@@ -813,7 +813,7 @@ bool DPDKQueuePair::poll_tx() {
         if (p) {
           work++;
           if (likely(nonloopback)) {
-            // ldout(cct, 0) << __func__ << " len: " << p->len() << " frags: " << p->nr_frags() << dendl;
+            ldout(cct, 5) << __func__ << " len: " << p->len() << " frags: " << p->nr_frags() << dendl;
             _tx_packetq.push_back(std::move(*p));
           } else {
             auto th = p->get_header<eth_hdr>(0);
@@ -832,7 +832,7 @@ bool DPDKQueuePair::poll_tx() {
     } while (work && total_work < 256 && _tx_packetq.size() < 128);
   }
   if (!_tx_packetq.empty()) {
-    //std::cout<<"func poll_tx :tx packets num: "<<_tx_packetq.size()<<std::endl;  //debug
+    ldout(cct, 10) << __func__ << " :tx packets num: " << _tx_packetq.size() << dendl;
     uint64_t c = send(_tx_packetq);
     perf_logger->inc(l_dpdk_qp_tx_packets, c);
     perf_logger->set(l_dpdk_qp_tx_last_bunch, c);

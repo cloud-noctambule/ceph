@@ -145,6 +145,7 @@ class MessengerClient {
         m->set_tid(make_tid(record_start_pos[sid_index],sid_index));
         inflight++;
         record[(*sid)[sid_index]][record_start_pos[sid_index]++]=Cycles::rdtsc();//可能有点误差
+        std::cout<<"send normal message, tid:"<<m->get_tid()<<std::endl;
         (*conns)[sid_index]->send_message(m);
         //cerr << __func__ << " send m=" << m << std::endl;
       }
