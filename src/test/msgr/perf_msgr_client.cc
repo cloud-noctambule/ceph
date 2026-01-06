@@ -165,7 +165,7 @@ class MessengerClient {
           fragment frag ;
           bool ret =(*conns)[sid_index]->get_a_frag(frag);
           if(!ret){
-            // std::cout<<"get_a_frag failed"<<std::endl;
+            std::cout<<"get_a_frag failed"<<std::endl;
             continue;
           }
           // std::cout<<"msg_len "<<msg_len<<" frag size:"<<frag.size<<", to_send_data_off:"<<to_send_data_off<<std::endl;
@@ -175,7 +175,7 @@ class MessengerClient {
           to_send_data_off +=to_copy;
           vecs.push_back(frag);
         }
-        // std::cout<<"send dpdk message, tid:"<<dpdk_msg->get_tid()<<std::endl;
+        std::cout<<"send dpdk message, tid:"<<dpdk_msg->get_tid()<<std::endl;
         dpdk_msg->set_data(Packet(vecs, deleter()));
         (*conns)[sid_index]->send_dpdk_message(dpdk_msg);
         inflight++;
@@ -417,7 +417,7 @@ void MessengerClient::ClientDispatcher::ms_fast_dispatch(Message *m) {
     thread->cond.notify_all();
   }
   else{
-    // std::cout<<"dpdk recv message, tid:"<<m->get_tid()<<std::endl;
+    std::cout<<"dpdk recv message, tid:"<<m->get_tid()<<std::endl;
     thread->set_record(m->get_tid(),recv_time);
     thread->inflight--;
   }
