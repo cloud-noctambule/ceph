@@ -1258,6 +1258,7 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
     if (!check_frag0(p)) {
       auto& head_frag = p.get_protocol_header();
       if( head_frag.mbuf_ptr != nullptr){
+        ldout(cct, 15) << __func__ << " reuse head mbuf, head_frag.size " << head_frag.size << " p.frag(0).size " << p.frag(0).size << dendl;  //debug
         ceph_assert( head_frag.size + p.frag(0).size <= inline_mbuf_data_size);
         char temp[256];
         memcpy(temp, head_frag.base, head_frag.size);
@@ -1269,6 +1270,7 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
         head = m;
       }
       else{
+        ldout(cct, 15) << __func__ << " create new head mbuf, head_frag.size " << head_frag.size << " p.frag(0).size " << p.frag(0).size << dendl;  //debug
         tx_buf* buf = qp.get_tx_buf();
         fragment& frag0 = p.frag(0);
         if( !buf){
@@ -1301,6 +1303,7 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
       if( p.frag(i).mbuf_ptr != nullptr){
         h = static_cast<rte_mbuf*>(p.frag(i).mbuf_ptr);
         new_last_seg = h;
+        h->data_len = p.frag(i).size;
         nsegs = 1;
       }
       else{
@@ -1332,6 +1335,7 @@ DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
     // Update the HEAD buffer with the packet info
     head->pkt_len = p.len();
     head->nb_segs = total_nsegs;
+    ldout(cct, 15) << __func__ << " total_nsegs" << total_nsegs<<" pkt len" << head->pkt_len << dendl;  //debug
     // tx_pkt_burst loops until the next pointer is null, so last_seg->next must
     // be null.
     last_seg->next = nullptr;
