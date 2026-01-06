@@ -149,7 +149,7 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
       ceph_assert(_buf->using_internal_data() == false); 
       _cur_off = 0;
     }
-    std::cout<<"zero copy read packet, len : "<<len<<", _buf->len() : "<<_buf->len()<<" cur_off : "<<_cur_off<<std::endl;
+    // std::cout<<"zero copy read packet, len : "<<len<<", _buf->len() : "<<_buf->len()<<" cur_off : "<<_cur_off<<std::endl;
     if( _cur_off == _buf->len() ){
       _buf.reset();
       _cur_off = 0;

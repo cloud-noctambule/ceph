@@ -145,7 +145,7 @@ class MessengerClient {
         m->set_tid(make_tid(record_start_pos[sid_index],sid_index));
         inflight++;
         record[(*sid)[sid_index]][record_start_pos[sid_index]++]=Cycles::rdtsc();//可能有点误差
-        std::cout<<"send normal message, tid:"<<m->get_tid()<<std::endl;
+        // std::cout<<"send normal message, tid:"<<m->get_tid()<<std::endl;
         (*conns)[sid_index]->send_message(m);
         //cerr << __func__ << " send m=" << m << std::endl;
       }
@@ -168,15 +168,15 @@ class MessengerClient {
             // std::cout<<"get_a_frag failed"<<std::endl;
             continue;
           }
-          std::cout<<"msg_len "<<msg_len<<" frag size:"<<frag.size<<", to_send_data_off:"<<to_send_data_off<<std::endl;
+          // std::cout<<"msg_len "<<msg_len<<" frag size:"<<frag.size<<", to_send_data_off:"<<to_send_data_off<<std::endl;
           int to_copy = min(msg_len - to_send_data_off, static_cast<int>(frag.size));
           memcpy(frag.base,pure_data+to_send_data_off,to_copy);
           frag.size = to_copy;
           to_send_data_off +=to_copy;
           vecs.push_back(frag);
         }
-        std::cout<<"send dpdk message, tid:"<<dpdk_msg->get_tid()<<std::endl;
-        dpdk_msg->set_data(std::move(Packet(vecs, deleter())));
+        // std::cout<<"send dpdk message, tid:"<<dpdk_msg->get_tid()<<std::endl;
+        dpdk_msg->set_data(Packet(vecs, deleter()));
         (*conns)[sid_index]->send_dpdk_message(dpdk_msg);
         inflight++;
         record[(*sid)[sid_index]][record_start_pos[sid_index]++]=Cycles::rdtsc();//可能有点误差
@@ -483,8 +483,8 @@ int main(int argc, char **argv)
       g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
     }
 
-    g_ceph_context->_conf.set_val("debug_dpdk", "20/20", &cout_ss);
-    g_ceph_context->_conf.set_val("debug_ms", "11/11", &cout_ss);
+    // g_ceph_context->_conf.set_val("debug_dpdk", "20/20", &cout_ss);
+    // g_ceph_context->_conf.set_val("debug_ms", "11/11", &cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);
