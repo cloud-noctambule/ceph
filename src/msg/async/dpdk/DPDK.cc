@@ -813,7 +813,7 @@ bool DPDKQueuePair::poll_tx() {
         if (p) {
           work++;
           if (likely(nonloopback)) {
-            ldout(cct, 5) << __func__ << " len: " << p->len() << " frags: " << p->nr_frags() << dendl;
+            ldout(cct, 5) << __func__ <<" address p:"<<&(*p)<<" len: " << p->len() << " frags: " << p->nr_frags() << dendl;
             _tx_packetq.push_back(std::move(*p));
           } else {
             auto th = p->get_header<eth_hdr>(0);

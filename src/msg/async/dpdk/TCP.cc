@@ -754,6 +754,7 @@ void tcp<InetTraits>::tcb::close_final_cleanup()
 template <typename InetTraits>
 void tcp<InetTraits>::tcb::retransmit()
 {
+  ldout(_tcp.cct, 15) << __func__ << " retransmit enter" << dendl;
   auto output_update_rto = [this] {
     output();
     // According to RFC6298, Update RTO <- RTO * 2 to perform binary exponential back-off
@@ -825,7 +826,11 @@ void tcp<InetTraits>::tcb::retransmit()
 
   output_update_rto();
 }
-
+template <typename InetTraits>
+void tcp<InetTraits>::tcb::bypass_logger(const std::string& msg)
+{
+  ldout(_tcp.cct, 20) << __func__ << " " << msg << dendl;
+}
 template <typename InetTraits>
 void tcp<InetTraits>::tcb::persist() {
   ldout(_tcp.cct, 20) << __func__ << " persist timer fired" << dendl;

@@ -336,6 +336,7 @@ void ipv4::send(ipv4_address to, ip_protocol_num proto_num,
 std::optional<l3_protocol::l3packet> ipv4::get_packet() {
   // _packetq will be mostly empty here unless it hold remnants of previously
   // fragmented packet
+  ldout(cct, 20) << " ipv4::_packetq size " << _packetq.size() << dendl;
   if (_packetq.empty()) {
     for (size_t i = 0; i < _pkt_providers.size(); i++) {
       auto l4p = _pkt_providers[_pkt_provider_idx++]();

@@ -493,6 +493,7 @@ class tcp {
       }
     };
     void persist();
+    void bypass_logger(const std::string& msg);   
     void retransmit();
     void fast_retransmit();
     void update_rto(clock_type::time_point tx_time);
@@ -1119,7 +1120,9 @@ void tcp<InetTraits>::tcb::output_one(bool data_retransmit) {
   if (in_state(CLOSED)) {
     return;
   }
-
+  if(data_retransmit){
+    bypass_logger(" tcb::output_one: data_retransmit");
+  }
   Packet p = data_retransmit ? _snd.data.front().p.share() : get_transmit_packet();
   Packet clone = p.share();  // early clone to prevent share() from calling packet::unuse_internal_data() on header.
   uint16_t len = p.len();
@@ -1461,6 +1464,7 @@ tcp_sequence tcp<InetTraits>::tcb::get_isn() {
 template <typename InetTraits>
 std::optional<typename InetTraits::l4packet> tcp<InetTraits>::tcb::get_packet() {
   _poll_active = false;
+  bypass_logger(" tcb::get_packet: "+std::to_string(_packetq.size()));
   if (_packetq.empty()) {
     output_one();
   }
