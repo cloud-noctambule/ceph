@@ -166,6 +166,7 @@ class MessengerClient {
           bool ret =(*conns)[sid_index]->get_a_frag(frag);
           if(!ret){
             std::cout<<"get_a_frag failed"<<std::endl;
+            usleep(100000);
             continue;
           }
           // std::cout<<"msg_len "<<msg_len<<" frag size:"<<frag.size<<", to_send_data_off:"<<to_send_data_off<<std::endl;
@@ -483,8 +484,8 @@ int main(int argc, char **argv)
       g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
     }
 
-    // g_ceph_context->_conf.set_val("debug_dpdk", "20/20", &cout_ss);
-    // g_ceph_context->_conf.set_val("debug_ms", "11/11", &cout_ss);
+    g_ceph_context->_conf.set_val("debug_dpdk", "20/20", &cout_ss);
+    g_ceph_context->_conf.set_val("debug_ms", "11/11", &cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);

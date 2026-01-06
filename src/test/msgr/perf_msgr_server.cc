@@ -198,8 +198,8 @@ int main(int argc, char **argv)
     else{
       g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
     }
-    // g_ceph_context->_conf.set_val("debug_dpdk", "20/20", &cout_ss);
-    // g_ceph_context->_conf.set_val("debug_ms", "11/11", &cout_ss);
+    g_ceph_context->_conf.set_val("debug_dpdk", "20/20", &cout_ss);
+    g_ceph_context->_conf.set_val("debug_ms", "11/11", &cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);
