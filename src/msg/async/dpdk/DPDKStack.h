@@ -214,7 +214,7 @@ std::optional<Packet> tcp<InetTraits>::tcb::read()这个接口
     if( available < send_len ) {
       return -EAGAIN;
     }
-    std::cout<<"zero copy send packet, len : "<<send_len<<" Pakcet "<<p<<std::endl;
+    // std::cout<<"zero copy send packet, len : "<<send_len<<" Pakcet "<<p<<std::endl;
     _conn.send(std::move(*p));
     return send_len;
   }
