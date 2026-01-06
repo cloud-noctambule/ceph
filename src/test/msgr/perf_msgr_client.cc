@@ -417,7 +417,7 @@ void MessengerClient::ClientDispatcher::ms_fast_dispatch(Message *m) {
     thread->cond.notify_all();
   }
   else{
-    std::cout<<"dpdk recv message, tid:"<<m->get_tid()<<std::endl;
+    // std::cout<<"dpdk recv message, tid:"<<m->get_tid()<<std::endl;
     thread->set_record(m->get_tid(),recv_time);
     thread->inflight--;
   }
