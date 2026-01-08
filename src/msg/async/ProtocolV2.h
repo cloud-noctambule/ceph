@@ -52,11 +52,11 @@ private:
     CLOSED
   };
   enum DPDKReadState {
+    DPDK_READ_DONE,
     DPDK_READ_HEAD,
     DPDK_READ_PAYLOAD,
     DPDK_READ_MIDDLE,
     DPDK_READ_DATA,
-    DPDK_READ_DONE
   };
   static const char *get_state_name(int state) {
     const char *const statenames[] = {"NONE",
@@ -151,7 +151,6 @@ private:
   std::vector<DPDKMessage*> temp_container;
   bool dpdk_work_throught_encode;
   Message* dpdk_msg_wrapper = nullptr;
-  DPDKMessage* pre_msg = nullptr;
   ssize_t dpdk_tag_offset;
   utime_t backoff;  // backoff time
   utime_t recv_stamp;

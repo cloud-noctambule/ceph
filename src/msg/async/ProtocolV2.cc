@@ -805,17 +805,18 @@ void ProtocolV2::reset_compression() {
   session_compression_handlers.tx.reset(nullptr);
 }
 void ProtocolV2::write_for_dpdk(){
-  bool ret = false;
-  DPDKMessage* dpdk_msg; 
-  // ldout(cct, 5) << __func__ << dendl;
-  do{
-    ret = dpdk_out_queue.pop(dpdk_msg);
-    if(ret){
-      ldout(cct, 5) << __func__ << " write_dpdk_message dpdk_msg=" << dpdk_msg << dendl;
-      write_dpdk_message(dpdk_msg);
-    }
-  }while(ret == true);
+
   if(state >= READY && state != CLOSED){
+  // ldout(cct, 5) << __func__ << dendl;
+    bool ret = false;
+    DPDKMessage* dpdk_msg; 
+    do{
+      ret = dpdk_out_queue.pop(dpdk_msg);
+      if(ret){
+        ldout(cct, 5) << __func__ << " write_dpdk_message dpdk_msg=" << dpdk_msg << dendl;
+        write_dpdk_message(dpdk_msg);
+      }
+    }while(ret == true);
     connection->_try_send_dpdk();
   }
 }
@@ -1302,7 +1303,7 @@ CtPtr ProtocolV2::polling_dpdk_frame(){
         // 便于解耦decode工作和后面的派发工作
         ldout(cct, 5) << __func__ << " normal preabmle size "<<rx_frame_asm.get_preamble_onwire_len()<< " read as DPDKMessage" << dendl;
         next_tag = Tag::DPDK_MESSAGE;
-        pre_msg = nullptr;
+        pending_dpdk_msg = nullptr;
         return read_dpdk();
       }
       ldout(cct, 15) << __func__ << " peek DPDK_MESSAGE tag ret : "<< ret << dendl;
@@ -1333,7 +1334,7 @@ CtPtr ProtocolV2::read_frame() {
         // 便于解耦decode工作和后面的派发工作
         ldout(cct, 5) << __func__ << " normal preabmle size "<<rx_frame_asm.get_preamble_onwire_len()<< " read as DPDKMessage" << dendl;
         next_tag = Tag::DPDK_MESSAGE;
-        pre_msg = nullptr;
+        pending_dpdk_msg = nullptr;
         return read_dpdk();
       }
       ldout(cct, 5) << __func__ << " peek DPDK_MESSAGE tag ret : "<< ret << dendl;
@@ -1343,6 +1344,7 @@ CtPtr ProtocolV2::read_frame() {
       }
     }
     else{
+      ldout(cct, 5) << __func__ <<" DPDKStage "<<dpdk_read_state<< " read un-finished DPDKMessage" << dendl;
       return read_dpdk();
     }
   }
@@ -1354,7 +1356,7 @@ CtPtr ProtocolV2::read_frame() {
 }
 CtPtr ProtocolV2::read_dpdk(){
   DPDKMessage *dpdk_msg;
-  if(pre_msg == nullptr){
+  if(pending_dpdk_msg == nullptr){
     dpdk_msg = new DPDKMessage();
   }
   else{
@@ -1383,7 +1385,7 @@ PAYLOAD_READ:
         // ceph_abort();
         pending_dpdk_msg = dpdk_msg;
         dpdk_read_state = DPDK_READ_PAYLOAD;
-        ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " fail, read DPDKMessage payload size : "<<header.front_len << dendl;
+        ldout(cct, 5) << __func__ <<" DPDKStage "<<dpdk_read_state<< " fail, read DPDKMessage payload size : "<<header.front_len << dendl;
         return nullptr;
       }
       dpdk_msg->set_payload(std::move(payload));
@@ -1393,31 +1395,30 @@ PAYLOAD_READ:
 MIDDLE_READ:
     {
       Packet middle;
-      ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " read DPDKMessage middle size : "<<header.middle_len << dendl;
+      ldout(cct, 5) << __func__ <<" DPDKStage "<<dpdk_read_state<< " read DPDKMessage middle size : "<<header.middle_len << dendl;
       ret=connection->read_until_dpdk(middle, header.middle_len);
       if(ret < 0){
         // ceph_abort();
         pending_dpdk_msg = dpdk_msg;
         dpdk_read_state = DPDK_READ_MIDDLE;
-        ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " fail, read DPDKMessage middle size : "<<header.middle_len << dendl;
+        ldout(cct, 5) << __func__ <<" DPDKStage "<<dpdk_read_state<< " fail, read DPDKMessage middle size : "<<header.middle_len << dendl;
         return nullptr;
       }
       dpdk_msg->set_middle(std::move(middle));
     }
 DATA_READ:
     {
-      Packet data;
-      ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " read DPDKMessage data size : "<<header.data_len << dendl;
-      ret=connection->read_until_dpdk(data, header.data_len);
-      if(ret < 0){
+      ldout(cct, 5) << __func__ <<" DPDKStage "<<dpdk_read_state<< " read DPDKMessage data size : "<<header.data_len << dendl;
+      ret=connection->read_until_dpdk(dpdk_msg->get_data(), header.data_len - cur_dpdk_read_len);
+      cur_dpdk_read_len = dpdk_msg->get_data().len();
+      if(ret < 0 || cur_dpdk_read_len != header.data_len){
         // ceph_abort();
         pending_dpdk_msg = dpdk_msg;
         dpdk_read_state = DPDK_READ_DATA;
-        ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " fail, read DPDKMessage data size : "<<header.data_len << dendl;
+        ldout(cct, 5) << __func__ <<" DPDKStage "<<dpdk_read_state<< " fail, current data size : "<<cur_dpdk_read_len <<" need "<<header.data_len << dendl;
         return nullptr;
       }
-      dpdk_msg->set_data(std::move(data));
-      dpdk_read_state = DPDK_READ_DONE;
+      ceph_assert(cur_dpdk_read_len == header.data_len);
       dpdk_read_state = DPDK_READ_DONE;
       bool ret_push = dpdk_message_to_decodes.push(dpdk_msg);
       if(!ret_push){
@@ -1425,15 +1426,17 @@ DATA_READ:
         temp_container.push_back(dpdk_msg);
       }
       dpdk_msg = nullptr;
+      ldout(cct, 5) << __func__ <<" DPDKStage "<<dpdk_read_state<< " read DPDKMessage done" << dendl;
       if(dpdk_work_throught_encode){
         return handle_dpdk_message();
       }
+      return nullptr;
     }
   }
 HEAD_READ:
   constexpr ssize_t preabmble_epilogue_header_size = sizeof(ceph_msg_header2) + sizeof(preamble_block_t) + sizeof(epilogue_crc_rev0_block_t);
   Packet preamble_epilogue_header_packet;
-  ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " read DPDKMessage preamble_epilogue_header size : "<<preabmble_epilogue_header_size << dendl;
+  ldout(cct, 5) << __func__ <<" DPDKStage "<<dpdk_read_state<< " read DPDKMessage preamble_epilogue_header size : "<<preabmble_epilogue_header_size << dendl;
   ssize_t ret = connection->read_until_dpdk(preamble_epilogue_header_packet, preabmble_epilogue_header_size);
   if(ret < 0){
     // ceph_abort();
@@ -1456,7 +1459,7 @@ HEAD_READ:
     // 用header2给header赋值
     header.seq = header2->seq;
     header.tid = header2->tid;
-    ldout(cct, 5) << __func__ << " read DPDKMessage, tid : "<<header.tid << dendl;
+    
     header.type = header2->type;
     header.priority = header2->priority;
     header.version = header2->version;
@@ -1468,7 +1471,7 @@ HEAD_READ:
     header.compat_version = header2->compat_version;
     header.reserved = header2->reserved;
     header.crc = ceph_le32(0);        // header2没有crc字段，初始化为0
-
+    ldout(cct, 5) << __func__ << " read DPDKMessage, tid : "<<header.tid<<" front_len : "<<header.front_len<<" middle_len : "<<header.middle_len<<" data_len : "<<header.data_len << dendl;
     // 用header2给footer赋值
     footer.front_crc = ceph_le32(0);
     footer.middle_crc = ceph_le32(0);
@@ -1477,13 +1480,13 @@ HEAD_READ:
     footer.flags = header2->flags;
     if(header.front_len !=0){
       Packet payload;
-      ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " read DPDKMessage payload size : "<<header.front_len << dendl;
+      ldout(cct, 5) << __func__ <<" DPDKStage "<<dpdk_read_state<< " read DPDKMessage payload size : "<<header.front_len << dendl;
       ret=connection->read_until_dpdk(payload, header.front_len);
       if(ret < 0){
         // ceph_abort();
         pending_dpdk_msg = dpdk_msg;
         dpdk_read_state = DPDK_READ_PAYLOAD;
-        ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " read DPDKMessage payload size : "<<header.front_len << dendl;
+        ldout(cct, 5) << __func__ <<" DPDKStage "<<dpdk_read_state<< " read DPDKMessage payload size : "<<header.front_len << dendl;
         return nullptr;
       }
       dpdk_msg->set_payload(std::move(payload));
@@ -1504,13 +1507,14 @@ HEAD_READ:
       Packet data;
       ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " read DPDKMessage data size : "<<header.data_len << dendl;
       ret=connection->read_until_dpdk(data, header.data_len);
-      if(ret < 0){
+      dpdk_msg->set_data(std::move(data));
+      if(ret < 0 || dpdk_msg->get_data().len() != header.data_len){
         pending_dpdk_msg = dpdk_msg;
         dpdk_read_state = DPDK_READ_DATA;
-        ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " fail, read DPDKMessage data size : "<<header.data_len << dendl;
+        cur_dpdk_read_len = dpdk_msg->get_data().len();
+        ldout(cct, 5) << __func__ <<"DPDKStage "<<dpdk_read_state<< " fail, read DPDKMessage data size : "<<dpdk_msg->get_data().len()<<" need "<<header.data_len << dendl;
         return nullptr;
       }
-      dpdk_msg->set_data(std::move(data));
     }
     dpdk_read_state = DPDK_READ_DONE;
     bool ret = dpdk_message_to_decodes.push(dpdk_msg);

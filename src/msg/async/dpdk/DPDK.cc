@@ -1531,6 +1531,11 @@ size_t DPDKQueuePair::tx_buf::copy_one_data_buf(
   return len;
 }
 
+void DPDKQueuePair::tx_buf_factory::bypass_logger(const std::string& msg)
+{
+  ldout(cct, 5) << msg << dendl;
+}
+
 void DPDKQueuePair::bypass_logger(const std::string& msg)
 {
   ldout(cct, 5) << msg << dendl;

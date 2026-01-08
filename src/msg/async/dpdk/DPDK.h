@@ -448,6 +448,7 @@ class DPDKQueuePair {
     //
     static constexpr int gc_count = 1;
    public:
+    void bypass_logger(const std::string& str); 
     tx_buf_factory(CephContext *c, DPDKDevice *dev, uint8_t qid);
     ~tx_buf_factory() {
       // put all mbuf back into mempool in order to make the next factory work
@@ -472,8 +473,10 @@ class DPDKQueuePair {
         tx_buf* pkt = nullptr;
         bool ret = _ring_share.pop(pkt);
         if (!ret) {
+          bypass_logger("tx_buf_factory : get_a_frag failed, _ring_size " + std::to_string(_ring_size));
           return false;
         }
+        _ring_size--;
         rte_mbuf* buf = pkt->rte_mbuf_p();
         frag.base = rte_pktmbuf_mtod(buf, char*);
         frag.size = inline_mbuf_data_size;
@@ -502,6 +505,7 @@ class DPDKQueuePair {
             gc();
             return nullptr;
           }
+          _ring_size--;
         }
       }
       else{
@@ -537,6 +541,8 @@ class DPDKQueuePair {
             ceph_abort();
             _ring.push_back(buf);
           }
+          _ring_size++;
+          bypass_logger("tx_buf_factory: _ring_size " + std::to_string(_ring_size));
         }
 
       }
@@ -616,6 +622,7 @@ class DPDKQueuePair {
               ceph_abort();
               _ring.push_back(new(tx_buf::me(mbuf)) tx_buf{*this});
             }
+            _ring_size++;
           }
         }
       }
@@ -644,6 +651,7 @@ class DPDKQueuePair {
     bool is_force_zero_copy_enabled;
     std::vector<tx_buf*> _ring;
     boost::lockfree::queue<tx_buf*> _ring_share;
+    std::atomic<int> _ring_size{0};
     std::list<tx_buf*> _later_to_free;
     static constexpr size_t inline_mbuf_data_size = 2048;
     rte_mempool* _pool = nullptr;
