@@ -73,6 +73,11 @@ class ServerDispatcher : public Dispatcher {
       if(!osd_op->is_dpdk_message_wrapper){
         m->put();
       }
+      else{
+        DPDKMessage *dpdk_msg = (DPDKMessage*)m->dpdk_msg;
+        dpdk_msg->put();
+        m->dpdk_msg = nullptr;
+      }
     }
     void _process_finish(Message *m) override { }
     void _clear() override {
@@ -198,8 +203,8 @@ int main(int argc, char **argv)
     else{
       g_ceph_context->_conf.set_val("ms_dpdk_force_zero_copy", "false",&cout_ss);
     }
-    g_ceph_context->_conf.set_val("debug_dpdk", "1/1", &cout_ss);
-    g_ceph_context->_conf.set_val("debug_ms", "1/1", &cout_ss);
+    // g_ceph_context->_conf.set_val("debug_dpdk", "1/1", &cout_ss);
+    // g_ceph_context->_conf.set_val("debug_ms", "1/1", &cout_ss);
     cout<<cout_ss.str()<<std::endl;
   }
   common_init_finish(g_ceph_context);

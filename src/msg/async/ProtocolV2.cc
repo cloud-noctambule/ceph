@@ -1814,6 +1814,7 @@ CtPtr ProtocolV2::handle_dpdk_message(){
   ldout(cct, 5) << __func__ << " handle DPDKMessage tid=" << dpdk_msg->get_header().tid << dendl;
   dpdk_msg_wrapper->set_tid(dpdk_msg->get_header().tid);
   dpdk_msg_wrapper->set_connection(connection);
+  dpdk_msg_wrapper->dpdk_msg = dpdk_msg;
   if (connection->delay_state) {
     double delay_period = 0;
     connection->delay_state->queue(delay_period, dpdk_msg_wrapper);

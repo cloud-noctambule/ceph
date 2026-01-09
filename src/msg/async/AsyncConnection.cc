@@ -289,13 +289,13 @@ ssize_t AsyncConnection::read_until_dpdk(Packet& res, unsigned len){
   while(left > 0){
     ssize_t r = cs.read(res, left);
     if (r < 0) {
-      ldout(async_msgr->cct, 1) << __func__ << " reading from fd=" << cs.fd()
+      ldout(async_msgr->cct, 10) << __func__ << " reading from fd=" << cs.fd()
                           << " : r "<< r << " left:" << left << dendl;
       return r;
     }
     read_len+=r;
     left-=r;
-    ldout(async_msgr->cct, 5) << __func__ << " read_bulk read " << r << " bytes" <<" need read :"<< len<< " left len :" << left << dendl;
+    ldout(async_msgr->cct, 10) << __func__ << " read_bulk read " << r << " bytes" <<" need read :"<< len<< " left len :" << left << dendl;
   }
   return read_len;
 }

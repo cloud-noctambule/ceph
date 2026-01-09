@@ -143,7 +143,7 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
       
       //make sure internal data only
       if (!_buf){
-        std::cout<<"zero copy read packet, fail, could not read Packet"<<std::endl;
+        // std::cout<<"zero copy read packet, fail, could not read Packet"<<std::endl;
         return -EAGAIN;
       }
       ceph_assert(_buf->using_internal_data() == false); 

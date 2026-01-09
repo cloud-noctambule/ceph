@@ -279,6 +279,7 @@ protected:
 public:
   // zipkin tracing
   ZTracer::Trace trace;
+  void* dpdk_msg = nullptr;
   void encode_trace(ceph::buffer::list &bl, uint64_t features) const;
   void decode_trace(ceph::buffer::list::const_iterator &p, bool create = false);
 

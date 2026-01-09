@@ -215,13 +215,13 @@ int DPDKDevice::init_port_start()
   /* setting tx offloads for port */
   port_conf.txmode.offloads = _dev_info.default_txconf.offloads;
 
-  ldout(cct, 5) << __func__ << " Port " << int(_port_idx) << ": max_rx_queues "
+  ldout(cct, 10) << __func__ << " Port " << int(_port_idx) << ": max_rx_queues "
                 << _dev_info.max_rx_queues << "  max_tx_queues "
                 << _dev_info.max_tx_queues << dendl;
 
   _num_queues = std::min({_num_queues, _dev_info.max_rx_queues, _dev_info.max_tx_queues});
 
-  ldout(cct, 5) << __func__ << " Port " << int(_port_idx) << ": using "
+  ldout(cct, 10) << __func__ << " Port " << int(_port_idx) << ": using "
                 << _num_queues << " queues" << dendl;
 
   // Set RSS mode: enable RSS if seastar is configured with more than 1 CPU.
@@ -262,7 +262,7 @@ int DPDKDevice::init_port_start()
       // Set the RSS table to the correct size
       _redir_table.resize(_dev_info.reta_size);
       _rss_table_bits = std::lround(std::log2(_dev_info.reta_size));
-      ldout(cct, 5) << __func__ << " Port " << int(_port_idx)
+      ldout(cct, 10) << __func__ << " Port " << int(_port_idx)
                     << ": RSS table size is " << _dev_info.reta_size << dendl;
     } else {
       // FIXME: same with sw_reta
@@ -434,7 +434,7 @@ int DPDKDevice::init_port_fini()
     return -1;
   }
 
-  ldout(cct, 5) << __func__ << " created DPDK device" << dendl;
+  ldout(cct, 10) << __func__ << " created DPDK device" << dendl;
   AdminSocket *admin_socket = cct->get_admin_socket();
   dfx_hook = std::make_unique<XstatSocketHook>(this);
   int r = admin_socket->register_command("show_pmd_stats", dfx_hook.get(),
@@ -604,7 +604,7 @@ int DPDKDevice::check_port_link_status()
 
     if (true) {
       if (link.link_status) {
-        ldout(cct, 5) << __func__ << " done port "
+        ldout(cct, 10) << __func__ << " done port "
                       << static_cast<unsigned>(_port_idx)
                       << " link Up - speed " << link.link_speed
                       << " Mbps - "
@@ -813,7 +813,7 @@ bool DPDKQueuePair::poll_tx() {
         if (p) {
           work++;
           if (likely(nonloopback)) {
-            ldout(cct, 5) << __func__ <<" address p:"<<&(*p)<<" len: " << p->len() << " frags: " << p->nr_frags() << dendl;
+            ldout(cct, 10) << __func__ <<" address p:"<<&(*p)<<" len: " << p->len() << " frags: " << p->nr_frags() << dendl;
             _tx_packetq.push_back(std::move(*p));
           } else {
             auto th = p->get_header<eth_hdr>(0);
@@ -944,6 +944,7 @@ bool DPDKQueuePair::rx_gc(bool force)
       rte_mempool_put_bulk(_pktmbuf_pool_rx,
                            (void **)_rx_free_bufs.data(),
                            _rx_free_bufs.size());
+      ldout(cct, 5) << __func__ << " : free bufs back to mempool " << _rx_free_bufs.size() << dendl;
       // TODO: ceph_assert() in a fast path! Remove me ASAP!
       ceph_assert(_num_rx_free_segs >= _rx_free_bufs.size());
       _num_rx_free_segs -= _rx_free_bufs.size();
@@ -1049,7 +1050,7 @@ void DPDKQueuePair::process_packets(
     if (m->ol_flags & PKT_RX_RSS_HASH) {
       p->set_rss_hash(m->hash.rss);
     }
-    ldout(cct, 5) <<__func__<<" will to l2 , packet len : "<<bytes<<" packet frags : "<< nr_frags <<"p len "<<p->len()<<" p frags"<<p->nr_frags() << dendl;  //debug
+    ldout(cct, 10) <<__func__<<" will to l2 , packet len : "<<bytes<<" packet frags : "<< nr_frags <<"p len "<<p->len()<<" p frags"<<p->nr_frags() << dendl;  //debug
     //std::cout<<"func process_packets :  std::endl;  //debug
     _dev->l2receive(_qid, std::move(*p));
   }
@@ -1246,7 +1247,7 @@ void DPDKQueuePair::tx_buf::set_cluster_offload_info(const Packet& p, const DPDK
 DPDKQueuePair::tx_buf* DPDKQueuePair::tx_buf::from_packet_zc(
         CephContext *cct, Packet&& p, DPDKQueuePair& qp)
 {
-  ldout(cct, 5) << __func__ << " len " << p.len() << " frags " << p.nr_frags() << dendl;  //debug
+  ldout(cct, 10) << __func__ << " len " << p.len() << " frags " << p.nr_frags() << dendl;  //debug
   if( qp.is_force_zero_copy_enabled){
     // Too fragmented - linearize
     if (p.nr_frags() > max_frags) {
@@ -1533,12 +1534,12 @@ size_t DPDKQueuePair::tx_buf::copy_one_data_buf(
 
 void DPDKQueuePair::tx_buf_factory::bypass_logger(const std::string& msg)
 {
-  ldout(cct, 5) << msg << dendl;
+  ldout(cct, 10) << msg << dendl;
 }
 
 void DPDKQueuePair::bypass_logger(const std::string& msg)
 {
-  ldout(cct, 5) << msg << dendl;
+  ldout(cct, 10) << msg << dendl;
 }
 /******************************** Interface functions *************************/
 
